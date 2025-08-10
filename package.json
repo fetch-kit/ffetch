@@ -1,7 +1,7 @@
 {
   "name": "@gkoos/ffetch",
   "version": "0.1.3",
-  "description": "Dead-simple fetch wrapper with configurable timeouts, retries, and TypeScript-first DX",
+  "description": "Fetch wrapper with configurable timeouts, retries, and TypeScript-first DX",
   "keywords": [
     "fetch",
     "http",
@@ -9,12 +9,13 @@
     "timeout",
     "typescript"
   ],
+  "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/<you>/ffetch.git"
+    "url": "https://github.com/gkoos/ffetch.git"
   },
-  "homepage": "https://github.com/<you>/ffetch#readme",
-  "bugs": "https://github.com/<you>/ffetch/issues",
+  "homepage": "https://github.com/gkoos/ffetch#readme",
+  "bugs": "https://github.com/gkoos/ffetch/issues",
   "author": "Your Name <you@example.com>",
   "license": "MIT",
   "main": "./dist/index.cjs",
