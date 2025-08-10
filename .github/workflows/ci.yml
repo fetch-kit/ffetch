@@ -1,16 +1,16 @@
 name: CI
 on: [push, pull_request]
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v2
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run lint
-      - run: pnpm run test:ci
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:ci
       - uses: codecov/codecov-action@v3
