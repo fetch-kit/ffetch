@@ -32,13 +32,13 @@ const data = await f('https://api.example.com/v1/users').then(r => r.json())
 
 createClient(options?)
 
-| Option       | Type & default         | Description           |
-| ------------ | ---------------------- | --------------------- |
-| `timeout`    | `number` (ms)          | whole-request timeout |
-| `retries`    | `number` (0)           | max retry attempts    |
-| `retryDelay` | `number \| fn` (500)   | delay between retries |
-| `circuit`    | `{ threshold, reset }` | circuit-breaker rules |
-| `hooks`      | `{ before, after }`    | interceptors          |
+| Option       | Type & default                                                                       | Description                  |
+| ------------ | ------------------------------------------------------------------------------------ | ---------------------------- |
+| `timeout`    | `number` (ms)                                                                        | whole-request timeout        |
+| `retries`    | `number` (0)                                                                         | max retry attempts           |
+| `retryDelay` | `number \| fn` (exponential backoff + jitter)                                        | delay between retries        |
+| `circuit`    | `{ threshold, reset }`                                                               | circuit-breaker rules        |
+| `hooks`      | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete }` | lifecycle hooks/interceptors |
 
 Returns a fetch-like function:
 
