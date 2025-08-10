@@ -1,0 +1,65 @@
+{
+  "name": "ffetch",
+  "version": "0.1.2",
+  "description": "Dead-simple fetch wrapper with configurable timeouts, retries, and TypeScript-first DX",
+  "keywords": [
+    "fetch",
+    "http",
+    "retry",
+    "timeout",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/<you>/ffetch.git"
+  },
+  "homepage": "https://github.com/<you>/ffetch#readme",
+  "bugs": "https://github.com/<you>/ffetch/issues",
+  "author": "Your Name <you@example.com>",
+  "license": "MIT",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "lint-staged": {
+    "*.{ts,js,json,md}": [
+      "prettier --write",
+      "eslint --fix"
+    ]
+  },
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "test": "vitest",
+    "test:ci": "vitest --run --coverage",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier -w src",
+    "prepublishOnly": "npm run build && npm run test:ci"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.5",
+    "@eslint/js": "^9.33.0",
+    "@types/node": "^24.2.1",
+    "@typescript-eslint/eslint-plugin": "^8.39.0",
+    "@typescript-eslint/parser": "^8.39.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.33.0",
+    "happy-dom": "^18.0.1",
+    "husky": "^8.0.0",
+    "jsr": "^0.13.5",
+    "lint-staged": "^16.1.5",
+    "prettier": "^3.6.2",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
