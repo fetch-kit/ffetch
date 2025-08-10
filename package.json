@@ -1,6 +1,6 @@
 {
   "name": "ffetch",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Dead-simple fetch wrapper with configurable timeouts, retries, and TypeScript-first DX",
   "keywords": [
     "fetch",
