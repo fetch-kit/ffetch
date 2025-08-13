@@ -1,18 +1,10 @@
-import { retry, defaultDelay, RetryDelay } from './retry.js'
+import type { FFetchOptions, FFetch } from './types'
+import { retry, defaultDelay } from './retry.js'
 import { withTimeout } from './timeout.js'
 import { shouldRetry as defaultShouldRetry } from './should-retry.js'
 import { CircuitBreaker } from './circuit.js'
 
-export function createClient(
-  opts: {
-    timeout?: number
-    retries?: number
-    retryDelay?: RetryDelay
-    shouldRetry?: (err: unknown, res?: Response) => boolean
-    circuit?: { threshold: number; reset: number }
-    hooks?: import('./hooks.js').Hooks
-  } = {}
-) {
+export function createClient(opts: FFetchOptions = {}): FFetch {
   const {
     timeout = 5_000,
     retries = 0,
