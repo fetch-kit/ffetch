@@ -11,5 +11,7 @@ export interface FFetchOptions {
 
 export type FFetch = (
   input: RequestInfo | URL,
-  init?: RequestInit
+  init?: FFetchRequestInit
 ) => Promise<Response>
+
+export interface FFetchRequestInit extends RequestInit, FFetchOptions {}

@@ -1,4 +1,4 @@
-import type { FFetchOptions, FFetch } from './types'
+import type { FFetchOptions, FFetch, FFetchRequestInit } from './types.js'
 import { retry, defaultDelay } from './retry.js'
 import { withTimeout } from './timeout.js'
 import { shouldRetry as defaultShouldRetry } from './should-retry.js'
@@ -6,24 +6,33 @@ import { CircuitBreaker } from './circuit.js'
 
 export function createClient(opts: FFetchOptions = {}): FFetch {
   const {
-    timeout = 5_000,
-    retries = 0,
-    retryDelay = defaultDelay,
-    shouldRetry = defaultShouldRetry,
-    hooks = {},
+    timeout: clientDefaultTimeout = 5_000,
+    retries: clientDefaultRetries = 0,
+    retryDelay: clientDefaultRetryDelay = defaultDelay,
+    shouldRetry: clientDefaultShouldRetry = defaultShouldRetry,
+    hooks: clientDefaultHooks = {},
+    circuit: clientDefaultCircuit,
   } = opts
 
-  const breaker = opts.circuit
-    ? new CircuitBreaker(opts.circuit.threshold, opts.circuit.reset)
+  const breaker = clientDefaultCircuit
+    ? new CircuitBreaker(
+        clientDefaultCircuit.threshold,
+        clientDefaultCircuit.reset
+      )
     : null
 
-  return async (input: RequestInfo | URL, init: RequestInit = {}) => {
+  const client: FFetch = async (
+    input: RequestInfo | URL,
+    init: FFetchRequestInit = {}
+  ) => {
     let request = new Request(input, init)
-    if (hooks.transformRequest) {
-      request = await hooks.transformRequest(request)
-    }
-    await hooks.before?.(request)
     let attempt = 0
+    // Merge hooks: per-request hooks override client hooks, but fallback to client hooks
+    const effectiveHooks = { ...clientDefaultHooks, ...(init.hooks || {}) }
+    if (effectiveHooks.transformRequest) {
+      request = await effectiveHooks.transformRequest(request)
+    }
+    await effectiveHooks.before?.(request)
     // Combine two signals so abort from either source will abort the request
     function combineSignals(
       signalA?: AbortSignal,
@@ -41,7 +50,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       return controller.signal
     }
 
-    const doFetch = async () => {
+    const doFetch = async (timeout: number) => {
       const timeoutSignal = withTimeout(timeout, undefined) || undefined
       const userSignal = init.signal || undefined
       const combinedSignal = combineSignals(timeoutSignal, userSignal)
@@ -55,39 +64,54 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         if (err instanceof DOMException && err.name === 'AbortError') {
           // If a timeout is set, treat AbortError as a timeout
           if (timeout !== undefined && timeout !== null) {
-            await hooks.onTimeout?.(request)
+            await effectiveHooks.onTimeout?.(request)
           }
-          await hooks.onAbort?.(request)
+          await effectiveHooks.onAbort?.(request)
         } else if (
           err instanceof Error &&
           (err.message.includes('timeout') || err.name === 'TimeoutError')
         ) {
-          await hooks.onTimeout?.(request)
+          await effectiveHooks.onTimeout?.(request)
         }
         throw err
       }
     }
-    // Wrap shouldRetry to call onRetry hook
-    const shouldRetryWithHook = (err: unknown, res?: Response) => {
-      const retrying = shouldRetry(err, res)
-      if (retrying && attempt < retries) {
-        hooks.onRetry?.(request, attempt, err, res)
-      }
-      attempt++
-      return retrying
-    }
+
     const retryWithHooks = async () => {
-      try {
-        let res = await retry(doFetch, retries, retryDelay, shouldRetryWithHook)
-        if (hooks.transformResponse) {
-          res = await hooks.transformResponse(res, request)
+      // Merge per-request options with client defaults here to ensure latest values
+      const effectiveTimeout = init.timeout ?? clientDefaultTimeout
+      const effectiveRetries = init.retries ?? clientDefaultRetries
+      const effectiveRetryDelay =
+        typeof init.retryDelay !== 'undefined'
+          ? init.retryDelay
+          : clientDefaultRetryDelay
+      const effectiveShouldRetry = init.shouldRetry ?? clientDefaultShouldRetry
+
+      // Wrap shouldRetry to call onRetry hook
+      const shouldRetryWithHook = (err: unknown, res?: Response) => {
+        attempt++
+        const retrying = effectiveShouldRetry(err, res)
+        if (retrying && attempt <= effectiveRetries) {
+          effectiveHooks.onRetry?.(request, attempt - 1, err, res)
         }
-        await hooks.after?.(request, res)
-        await hooks.onComplete?.(request, res, undefined)
+        return retrying
+      }
+      try {
+        let res = await retry(
+          () => doFetch(effectiveTimeout),
+          effectiveRetries,
+          effectiveRetryDelay,
+          shouldRetryWithHook
+        )
+        if (effectiveHooks.transformResponse) {
+          res = await effectiveHooks.transformResponse(res, request)
+        }
+        await effectiveHooks.after?.(request, res)
+        await effectiveHooks.onComplete?.(request, res, undefined)
         return res
       } catch (err) {
-        await hooks.onError?.(request, err)
-        await hooks.onComplete?.(request, undefined, err)
+        await effectiveHooks.onError?.(request, err)
+        await effectiveHooks.onComplete?.(request, undefined, err)
         throw err
       }
     }
@@ -96,14 +120,16 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         return await breaker.invoke(retryWithHooks)
       } catch (err) {
         if (err instanceof Error && err.message === 'Circuit open') {
-          await hooks.onCircuitOpen?.(request)
+          await effectiveHooks.onCircuitOpen?.(request)
         }
-        await hooks.onError?.(request, err)
-        await hooks.onComplete?.(request, undefined, err)
+        await effectiveHooks.onError?.(request, err)
+        await effectiveHooks.onComplete?.(request, undefined, err)
         throw err
       }
     } else {
       return retryWithHooks()
     }
   }
+
+  return client
 }

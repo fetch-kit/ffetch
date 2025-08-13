@@ -6,13 +6,15 @@
 - **Retries** – exponential back-off + jitter
 - **Circuit breaker** – trip after N failures
 - **Hooks** – logging, auth, metrics, request/response transformation
+- **Per-request overrides** – customize behavior on a per-request basis
 - **Universal** – Node, Browser, Cloudflare Workers, React Native
 - **Zero runtime deps** – ships as dual ESM/CJS
 
 ## Install
 
-````bash
+```bash
 npm install @gkoos/ffetch
+```
 
 ## Quick Start
 
@@ -22,12 +24,12 @@ import { createClient } from '@gkoos/ffetch'
 const f = createClient({
   timeout: 5000,
   retries: 3,
-  retryDelay: n => 2 ** n * 100 + Math.random() * 100,
+  retryDelay: (n) => 2 ** n * 100 + Math.random() * 100,
 })
 
 const res = await f('https://api.example.com/v1/users')
 const data = await res.json()
-````
+```
 
 ## API
 
@@ -51,6 +53,32 @@ type FFetch = (
 ```
 
 ## Advanced
+
+### Per-request overrides
+
+You can override any client option on a per-request basis by passing it in the `init` parameter:
+
+```typescript
+const f = createClient({ timeout: 5000, retries: 2 })
+
+// Override timeout and retries for this request only
+await f('https://api.example.com/v1/users', {
+  timeout: 1000, // 1s timeout for this request
+  retries: 5, // up to 5 retries for this request
+})
+
+// Use a custom retry delay function for a single request
+await f('https://api.example.com/v1/data', {
+  retryDelay: (attempt) => 100 * attempt, // linear backoff for this request
+})
+
+// Override hooks for a single request
+await f('https://api.example.com/v1/metrics', {
+  hooks: {
+    before: (req) => console.log('Single request:', req.url),
+  },
+})
+```
 
 ### Circuit breaker
 
