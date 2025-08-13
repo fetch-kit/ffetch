@@ -1,13 +1,13 @@
 # @gkoos/ffetch
 
-**A tiny, TypeScript-first fetch wrapper that adds production-grade resilience in <4 kB.**
+**A TypeScript-first fetch wrapper that adds production-grade resilience in <4 kB.**
 
-- ✅ **Timeouts** – per-request or global
-- ✅ **Retries** – exponential back-off + jitter
-- ✅ **Circuit breaker** – trip after N failures
-- ✅ **Hooks** – logging, auth, metrics
-- ✅ **Universal** – Node, Browser, Cloudflare Workers, React Native
-- ✅ **Zero runtime deps** – ships as dual ESM/CJS
+- **Timeouts** – per-request or global
+- **Retries** – exponential back-off + jitter
+- **Circuit breaker** – trip after N failures
+- **Hooks** – logging, auth, metrics, request/response transformation
+- **Universal** – Node, Browser, Cloudflare Workers, React Native
+- **Zero runtime deps** – ships as dual ESM/CJS
 
 ## Install
 
@@ -25,20 +25,21 @@ const f = createClient({
   retryDelay: n => 2 ** n * 100 + Math.random() * 100,
 })
 
-const data = await f('https://api.example.com/v1/users').then(r => r.json())
+const res = await f('https://api.example.com/v1/users')
+const data = await res.json()
 ````
 
 ## API
 
 createClient(options?)
 
-| Option       | Type & default                                                                       | Description                  |
-| ------------ | ------------------------------------------------------------------------------------ | ---------------------------- |
-| `timeout`    | `number` (ms)                                                                        | whole-request timeout        |
-| `retries`    | `number` (0)                                                                         | max retry attempts           |
-| `retryDelay` | `number \| fn` (exponential backoff + jitter)                                        | delay between retries        |
-| `circuit`    | `{ threshold, reset }`                                                               | circuit-breaker rules        |
-| `hooks`      | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete }` | lifecycle hooks/interceptors |
+| Option       | Type & default                                                                                                            | Description                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `timeout`    | `number` (ms)                                                                                                             | whole-request timeout                      |
+| `retries`    | `number` (0)                                                                                                              | max retry attempts                         |
+| `retryDelay` | `number \| fn` (exponential backoff + jitter)                                                                             | delay between retries                      |
+| `circuit`    | `{ threshold, reset }`                                                                                                    | circuit-breaker rules                      |
+| `hooks`      | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete, transformRequest, transformResponse }` | lifecycle hooks/interceptors, transformers |
 
 Returns a fetch-like function:
 
@@ -70,6 +71,34 @@ const f = createClient({
   },
 })
 ```
+
+### Request/Response Transformation
+
+You can use the `transformRequest` and `transformResponse` hooks to modify the outgoing request or the incoming response.
+
+```typescript
+const f = createClient({
+  hooks: {
+    transformRequest: async (req) => {
+      // Add a custom header
+      return new Request(req, {
+        headers: { ...Object.fromEntries(req.headers), 'x-api-key': 'secret' },
+      })
+    },
+    transformResponse: async (res, req) => {
+      // Automatically parse JSON and attach to the response
+      const data = await res.json()
+      // You can return a new Response or attach data to the response as needed
+      return new Response(JSON.stringify({ data, meta: { url: req.url } }), {
+        status: res.status,
+        headers: res.headers,
+      })
+    },
+  },
+})
+```
+
+These hooks allow you to inject authentication, modify request/response bodies, or implement custom parsing and logging logic.
 
 ### License
 

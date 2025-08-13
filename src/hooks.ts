@@ -16,4 +16,9 @@ export type Hooks = {
     res?: Response,
     err?: unknown
   ) => void | Promise<void>
+  transformRequest?: (req: Request) => Request | Promise<Request>
+  transformResponse?: (
+    res: Response,
+    req: Request
+  ) => Response | Promise<Response>
 }

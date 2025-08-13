@@ -18,13 +18,38 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     : null
 
   return async (input: RequestInfo | URL, init: RequestInit = {}) => {
-    const request = new Request(input, init)
+    let request = new Request(input, init)
+    if (hooks.transformRequest) {
+      request = await hooks.transformRequest(request)
+    }
     await hooks.before?.(request)
     let attempt = 0
+    // Combine two signals so abort from either source will abort the request
+    function combineSignals(
+      signalA?: AbortSignal,
+      signalB?: AbortSignal
+    ): AbortSignal | undefined {
+      if (!signalA) return signalB
+      if (!signalB) return signalA
+      const controller = new AbortController()
+      function forwardAbort(signal: AbortSignal) {
+        if (signal.aborted) controller.abort()
+        else signal.addEventListener('abort', () => controller.abort())
+      }
+      forwardAbort(signalA)
+      forwardAbort(signalB)
+      return controller.signal
+    }
+
     const doFetch = async () => {
-      const signal = withTimeout(timeout, init.signal)
+      const timeoutSignal = withTimeout(timeout, undefined) || undefined
+      const userSignal = init.signal || undefined
+      const combinedSignal = combineSignals(timeoutSignal, userSignal)
+      const reqWithSignal = combinedSignal
+        ? new Request(request, { signal: combinedSignal })
+        : request
       try {
-        const res = await fetch(input, { ...init, signal })
+        const res = await fetch(reqWithSignal)
         return res
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
@@ -53,12 +78,10 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     }
     const retryWithHooks = async () => {
       try {
-        const res = await retry(
-          doFetch,
-          retries,
-          retryDelay,
-          shouldRetryWithHook
-        )
+        let res = await retry(doFetch, retries, retryDelay, shouldRetryWithHook)
+        if (hooks.transformResponse) {
+          res = await hooks.transformResponse(res, request)
+        }
         await hooks.after?.(request, res)
         await hooks.onComplete?.(request, res, undefined)
         return res

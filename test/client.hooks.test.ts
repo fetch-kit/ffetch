@@ -44,10 +44,19 @@ describe('Hooks', () => {
 
   it('calls onTimeout hook on timeout', async () => {
     const onTimeout = vi.fn()
-    global.fetch = vi.fn().mockImplementation(async (_url, { signal }) => {
-      await new Promise((r) => setTimeout(r, 100))
-      if (signal?.aborted) throw new DOMException('aborted', 'AbortError')
-      return new Response('ok')
+    global.fetch = vi.fn().mockImplementation(async (input) => {
+      // Listen for abort event and reject when it fires
+      const signal = input instanceof Request ? input.signal : undefined
+      return await new Promise((_resolve, reject) => {
+        if (signal && signal.aborted) {
+          reject(new DOMException('aborted', 'AbortError'))
+        } else if (signal) {
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        }
+        // Otherwise, never resolve (simulate hanging request)
+      })
     })
     const f = createClient({ timeout: 10, hooks: { onTimeout } })
     await expect(f('https://example.com')).rejects.toThrow()
@@ -56,10 +65,19 @@ describe('Hooks', () => {
 
   it('calls onAbort hook on abort', async () => {
     const onAbort = vi.fn()
-    global.fetch = vi.fn().mockImplementation(async (_url, { signal }) => {
-      await new Promise((r) => setTimeout(r, 100))
-      if (signal?.aborted) throw new DOMException('aborted', 'AbortError')
-      return new Response('ok')
+    global.fetch = vi.fn().mockImplementation(async (input) => {
+      // Listen for abort event and reject when it fires
+      const signal = input instanceof Request ? input.signal : undefined
+      return await new Promise((_resolve, reject) => {
+        if (signal && signal.aborted) {
+          reject(new DOMException('aborted', 'AbortError'))
+        } else if (signal) {
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        }
+        // Otherwise, never resolve (simulate hanging request)
+      })
     })
     const controller = new AbortController()
     setTimeout(() => controller.abort(), 10)
@@ -81,5 +99,35 @@ describe('Hooks', () => {
     await expect(f('https://example.com')).rejects.toThrow('fail')
     await expect(f('https://example.com')).rejects.toThrow('Circuit open')
     expect(onCircuitOpen).toHaveBeenCalled()
+  })
+
+  it('calls transformRequest and transformResponse hooks', async () => {
+    const transformRequest = vi.fn(async (req: Request) => {
+      // Add a custom header
+      const newReq = new Request(req, {
+        headers: { ...Object.fromEntries(req.headers), 'x-test': '1' },
+      })
+      return newReq
+    })
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const transformResponse = vi.fn(async (res: Response, _req: Request) => {
+      // Change the response body
+      const text = await res.text()
+      return new Response(text + '-transformed', { status: res.status })
+    })
+
+    global.fetch = vi.fn().mockImplementation(async (input) => {
+      // input is a Request object
+      expect(input instanceof Request).toBe(true)
+      expect(input.headers.get('x-test')).toBe('1')
+      return new Response('original', { status: 200 })
+    })
+
+    const f = createClient({ hooks: { transformRequest, transformResponse } })
+    const res = await f('https://example.com')
+    const body = await res.text()
+    expect(transformRequest).toHaveBeenCalled()
+    expect(transformResponse).toHaveBeenCalled()
+    expect(body).toBe('original-transformed')
   })
 })

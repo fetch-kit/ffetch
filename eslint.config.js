@@ -27,6 +27,7 @@ export default [
     rules: {
       ...ts.configs.recommended.rules,
       'no-undef': 'off', // TS already checks globals
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     },
   },
 ]

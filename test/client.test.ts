@@ -3,15 +3,19 @@ import { describe, it, expect, vi } from 'vitest'
 import { createClient } from '../src/client.js'
 
 it('aborts after 50 ms', async () => {
-  global.fetch = vi
-    .fn()
-    .mockImplementation(
-      async (_: RequestInfo | URL, { signal }: RequestInit = {}) => {
-        await new Promise((r) => setTimeout(r, 100))
-        if (signal?.aborted) throw new DOMException('aborted', 'AbortError')
-        return new Response('ok')
+  global.fetch = vi.fn().mockImplementation(async (input) => {
+    const signal = input instanceof Request ? input.signal : undefined
+    return await new Promise((_resolve, reject) => {
+      if (signal && signal.aborted) {
+        reject(new DOMException('aborted', 'AbortError'))
+      } else if (signal) {
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('aborted', 'AbortError'))
+        })
       }
-    ) as typeof global.fetch
+      // Otherwise, never resolve (simulate hanging request)
+    })
+  })
 
   const f = createClient({ timeout: 50 })
   await expect(f('https://example.com')).rejects.toThrow()
