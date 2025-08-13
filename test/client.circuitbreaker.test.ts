@@ -17,7 +17,7 @@ describe('CircuitBreaker', () => {
     await expect(f('https://example.com')).rejects.toThrow('fail')
 
     // Third call should be blocked by circuit breaker
-    await expect(f('https://example.com')).rejects.toThrow('Circuit open')
+    await expect(f('https://example.com')).rejects.toThrow('Circuit is open')
 
     // Wait for reset timeout
     await new Promise((r) => setTimeout(r, 220))

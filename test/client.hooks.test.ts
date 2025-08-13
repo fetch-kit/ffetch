@@ -97,7 +97,7 @@ describe('Hooks', () => {
       hooks: { onCircuitOpen },
     })
     await expect(f('https://example.com')).rejects.toThrow('fail')
-    await expect(f('https://example.com')).rejects.toThrow('Circuit open')
+    await expect(f('https://example.com')).rejects.toThrow('Circuit is open')
     expect(onCircuitOpen).toHaveBeenCalled()
   })
 
