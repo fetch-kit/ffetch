@@ -1,3 +1,5 @@
+import { CircuitOpenError } from './error.js'
+
 export class CircuitBreaker {
   private failures = 0
   private nextAttempt = 0
@@ -8,7 +10,8 @@ export class CircuitBreaker {
   ) {}
 
   async invoke<T>(fn: () => Promise<T>): Promise<T> {
-    if (Date.now() < this.nextAttempt) throw new Error('Circuit open')
+    if (Date.now() < this.nextAttempt)
+      throw new CircuitOpenError('Circuit is open')
     try {
       const res = await fn()
       this.onSuccess()

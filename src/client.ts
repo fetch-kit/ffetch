@@ -173,12 +173,11 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       try {
         return await breaker.invoke(retryWithHooks)
       } catch (err: unknown) {
-        if (err instanceof Error && err.message === 'Circuit open') {
+        if (err instanceof CircuitOpenError) {
           await effectiveHooks.onCircuitOpen?.(request)
-          const circuitErr = new CircuitOpenError('Circuit is open')
-          await effectiveHooks.onError?.(request, circuitErr)
-          await effectiveHooks.onComplete?.(request, undefined, circuitErr)
-          throw circuitErr
+          await effectiveHooks.onError?.(request, err)
+          await effectiveHooks.onComplete?.(request, undefined, err)
+          throw err
         }
         await effectiveHooks.onError?.(request, err)
         await effectiveHooks.onComplete?.(request, undefined, err)

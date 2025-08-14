@@ -109,7 +109,6 @@ describe('Hooks', () => {
       })
       return newReq
     })
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const transformResponse = vi.fn(async (res: Response, _req: Request) => {
       // Change the response body
       const text = await res.text()

@@ -207,6 +207,28 @@ const f = createClient({
 
 These hooks allow you to inject authentication, modify request/response bodies, or implement custom parsing and logging logic.
 
+---
+
+### Note on Timeout vs Abort Errors
+
+In most environments, `ffetch` will throw a `TimeoutError` if a request times out, and an `AbortError` if the user aborts the request. However, due to differences in how abort signals are handled in Node.js, browsers, and CI environments, a timeout may sometimes surface as an `AbortError` instead of a `TimeoutError` (especially in automated test environments).
+
+If you need to distinguish between these cases, check for both error types in your error handling logic:
+
+```typescript
+try {
+  await client('https://example.com')
+} catch (err) {
+  if (err instanceof TimeoutError || (err instanceof AbortError && /* context indicates timeout */)) {
+    // handle timeout
+  } else if (err instanceof AbortError) {
+    // handle user abort
+  }
+}
+```
+
+This is a pragmatic workaround for cross-environment compatibility.
+
 ### License
 
 MIT © 2025 gkoos

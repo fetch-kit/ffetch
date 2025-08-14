@@ -66,7 +66,6 @@ describe('FFetch per-request override', () => {
     let called = false
     mockFetchImpl(new Response('ok'), { failTimes: 1 })
     await client('http://x', {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       shouldRetry: (_err) => {
         called = true
         return true
