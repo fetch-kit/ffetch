@@ -16,6 +16,24 @@
 npm install @gkoos/ffetch
 ```
 
+### Minified Builds & CDN Usage
+
+For browser/CDN usage, a minified ESM build is available:
+
+- **jsDelivr:** `https://cdn.jsdelivr.net/npm/@gkoos/ffetch/dist/index.min.js`
+- **unpkg:** `https://unpkg.com/@gkoos/ffetch/dist/index.min.js`
+
+You can use it directly in a `<script type="module">` tag:
+
+```html
+<script type="module">
+  import createClient from 'https://unpkg.com/@gkoos/ffetch/dist/index.min.js'
+  // ...your code...
+</script>
+```
+
+Source maps are included for easier debugging in development.
+
 ## Quick Start
 
 ```typescript
