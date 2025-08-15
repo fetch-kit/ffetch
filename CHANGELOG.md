@@ -1,5 +1,11 @@
 # ffetch
 
+## 1.0.1
+
+### Patch Changes
+
+- 4be1694: Minified build added
+
 ## 1.0.0
 
 ### Major Changes
