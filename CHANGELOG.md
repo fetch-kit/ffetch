@@ -1,5 +1,11 @@
 # ffetch
 
+## 1.0.0
+
+### Major Changes
+
+- 0b8870d: Support for complex retry strategies implemented
+
 ## 0.3.0
 
 ### Minor Changes
