@@ -1,31 +1,42 @@
-export type RetryDelay = number | ((attempt: number) => number)
+import type { RetryContext } from './types.js'
 
-export const defaultDelay: RetryDelay = (n) =>
-  2 ** n * 200 + Math.random() * 100
+export type RetryDelay = number | ((ctx: RetryContext) => number)
 
-export async function retry<T>(
-  fn: () => Promise<T>,
+export const defaultDelay: RetryDelay = (ctx) =>
+  2 ** ctx.attempt * 200 + Math.random() * 100
+
+export async function retry(
+  fn: () => Promise<Response>,
   retries: number,
   delay: RetryDelay,
-  shouldRetry: (err: unknown, res?: T) => boolean = () => true
-): Promise<T> {
+  shouldRetry: (ctx: RetryContext) => boolean = () => true,
+  request: Request
+): Promise<Response> {
   let lastErr: unknown
-  let lastRes: T | undefined
+  let lastRes: Response | undefined
 
   for (let i = 0; i <= retries; i++) {
+    const ctx: RetryContext = {
+      attempt: i + 1,
+      request,
+      response: lastRes,
+      error: lastErr,
+    }
     try {
       lastRes = await fn()
-      // Check if we should retry based on the resolved value (e.g., HTTP status)
-      if (i < retries && shouldRetry(undefined, lastRes)) {
-        const wait = typeof delay === 'function' ? delay(i + 1) : delay
+      ctx.response = lastRes
+      ctx.error = undefined
+      if (i < retries && shouldRetry(ctx)) {
+        const wait = typeof delay === 'function' ? delay(ctx) : delay
         await new Promise((r) => setTimeout(r, wait))
         continue
       }
       return lastRes
     } catch (err) {
       lastErr = err
-      if (i === retries || !shouldRetry(err, lastRes)) throw err
-      const wait = typeof delay === 'function' ? delay(i + 1) : delay
+      ctx.error = err
+      if (i === retries || !shouldRetry(ctx)) throw err
+      const wait = typeof delay === 'function' ? delay(ctx) : delay
       await new Promise((r) => setTimeout(r, wait))
     }
   }

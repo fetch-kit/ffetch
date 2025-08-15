@@ -1,6 +1,6 @@
 # @gkoos/ffetch
 
-**A TypeScript-first fetch wrapper that adds production-grade resilience in <4 kB.**
+**A production-ready TypeScript-first drop-in replacement for native fetch.**
 
 - **Timeouts** – per-request or global
 - **Retries** – exponential back-off + jitter
@@ -24,12 +24,14 @@ import createClient from '@gkoos/ffetch'
 const f = createClient({
   timeout: 5000,
   retries: 3,
-  retryDelay: (n) => 2 ** n * 100 + Math.random() * 100,
+  retryDelay: ({ attempt }) => 2 ** attempt * 100 + Math.random() * 100,
 })
 
 const res = await f('https://api.example.com/v1/users')
 const data = await res.json()
 ```
+
+---
 
 ## API
 
@@ -39,7 +41,7 @@ createClient(options?)
 | ------------ | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | `timeout`    | `number` (ms)                                                                                                             | whole-request timeout                      |
 | `retries`    | `number` (0)                                                                                                              | max retry attempts                         |
-| `retryDelay` | `number \| fn` (exponential backoff + jitter)                                                                             | delay between retries                      |
+| `retryDelay` | `number \| (ctx: { attempt, request, response, error }) => number` (exponential backoff + jitter)                         | delay between retries                      |
 | `circuit`    | `{ threshold, reset }`                                                                                                    | circuit-breaker rules                      |
 | `hooks`      | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete, transformRequest, transformResponse }` | lifecycle hooks/interceptors, transformers |
 
@@ -51,6 +53,22 @@ type FFetch = (
   init?: RequestInit
 ) => Promise<Response>
 ```
+
+### Defaults
+
+| Option        | Default Value / Logic                                                                                |
+| ------------- | ---------------------------------------------------------------------------------------------------- |
+| `timeout`     | `5000` ms (5 seconds)                                                                                |
+| `retries`     | `0` (no retries)                                                                                     |
+| `retryDelay`  | Exponential backoff + jitter: <br>`({ attempt }) => 2 ** attempt * 200 + Math.random() * 100`        |
+| `shouldRetry` | Retries on network errors, HTTP 5xx, or 429. <br>Does not retry on 4xx (except 429) or abort/timeout |
+| `circuit`     | `undefined` (circuit breaker disabled by default)                                                    |
+| `hooks`       | `{}` (no hooks by default)                                                                           |
+
+**Note:**
+
+- The first retry attempt uses `attempt = 2` (i.e., the first call is attempt 1, first retry is 2).
+- `shouldRetry` default logic: retries on network errors, HTTP 5xx, or 429; does not retry on 4xx (except 429), abort, or timeout errors.
 
 ## Advanced
 
@@ -69,7 +87,7 @@ await f('https://api.example.com/v1/users', {
 
 // Use a custom retry delay function for a single request
 await f('https://api.example.com/v1/data', {
-  retryDelay: (attempt) => 100 * attempt, // linear backoff for this request
+  retryDelay: ({ attempt }) => 100 * attempt, // linear backoff for this request
 })
 
 // Override hooks for a single request
@@ -78,6 +96,33 @@ await f('https://api.example.com/v1/metrics', {
     before: (req) => console.log('Single request:', req.url),
   },
 })
+```
+
+### Retry/Backoff and Retry Policy
+
+#### retryDelay
+
+You can provide a function for `retryDelay` that receives a context object:
+
+```typescript
+retryDelay: ({ attempt, request, response, error }) => {
+  // attempt: number (starts at 2 for first retry)
+  // request: Request
+  // response: Response | undefined
+  // error: unknown
+  return 100 * attempt
+}
+```
+
+#### shouldRetry
+
+You can provide a function for `shouldRetry` that receives the same context object:
+
+```typescript
+shouldRetry: ({ attempt, request, response, error }) => {
+  // Retry only on 503
+  return response?.status === 503
+}
 ```
 
 ### Custom Error Types
@@ -209,7 +254,7 @@ These hooks allow you to inject authentication, modify request/response bodies, 
 
 ---
 
-### Note on Timeout vs Abort Errors
+## Note on Timeout vs Abort Errors
 
 In most environments, `ffetch` will throw a `TimeoutError` if a request times out, and an `AbortError` if the user aborts the request. However, due to differences in how abort signals are handled in Node.js, browsers, and CI environments, a timeout may sometimes surface as an `AbortError` instead of a `TimeoutError` (especially in automated test environments).
 
@@ -229,6 +274,11 @@ try {
 
 This is a pragmatic workaround for cross-environment compatibility.
 
-### License
+## Planned Features
+
+- Middleware support
+- Built-in caching
+
+## License
 
 MIT © 2025 gkoos

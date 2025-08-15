@@ -72,9 +72,11 @@ describe('retry with shouldRetry', () => {
 describe('custom shouldRetry', () => {
   it('uses custom retry policy and retries only once', async () => {
     // custom policy that only retries on 503
-    const customShouldRetry = (err: unknown, res?: Response): boolean => {
-      if (res) {
-        return res.status === 503
+    const customShouldRetry = (
+      ctx: import('../src/types').RetryContext
+    ): boolean => {
+      if (ctx.response) {
+        return ctx.response.status === 503
       }
       return false
     }

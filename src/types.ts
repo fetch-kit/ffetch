@@ -1,10 +1,17 @@
 import type { Hooks } from './hooks'
 
+export interface RetryContext {
+  attempt: number
+  request: Request
+  response?: Response
+  error?: unknown
+}
+
 export interface FFetchOptions {
   timeout?: number
   retries?: number
-  retryDelay?: number | ((attempt: number) => number)
-  shouldRetry?: (err: unknown, res?: Response) => boolean
+  retryDelay?: number | ((ctx: RetryContext) => number)
+  shouldRetry?: (ctx: RetryContext) => boolean
   circuit?: { threshold: number; reset: number }
   hooks?: Hooks
 }

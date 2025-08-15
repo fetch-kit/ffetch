@@ -1,12 +1,14 @@
 import { AbortError, CircuitOpenError, TimeoutError } from './error.js'
+import type { RetryContext } from './types.js'
 
-export function shouldRetry(err: unknown, res?: Response): boolean {
+export function shouldRetry(ctx: RetryContext): boolean {
+  const { error, response } = ctx
   if (
-    err instanceof AbortError ||
-    err instanceof CircuitOpenError ||
-    err instanceof TimeoutError
+    error instanceof AbortError ||
+    error instanceof CircuitOpenError ||
+    error instanceof TimeoutError
   )
     return false
-  if (!res) return true // network error
-  return res.status >= 500 || res.status === 429
+  if (!response) return true // network error
+  return response.status >= 500 || response.status === 429
 }

@@ -76,11 +76,16 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
 
       // Wrap shouldRetry to call onRetry hook
       let attempt = 0
-      const shouldRetryWithHook = (err: unknown, res?: Response) => {
-        attempt++
-        const retrying = effectiveShouldRetry(err, res)
+      const shouldRetryWithHook = (ctx: import('./types').RetryContext) => {
+        attempt = ctx.attempt
+        const retrying = effectiveShouldRetry(ctx)
         if (retrying && attempt <= effectiveRetries) {
-          effectiveHooks.onRetry?.(request, attempt - 1, err, res)
+          effectiveHooks.onRetry?.(
+            request,
+            attempt - 1,
+            ctx.error,
+            ctx.response
+          )
         }
         return retrying
       }
@@ -132,7 +137,8 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
           },
           effectiveRetries,
           effectiveRetryDelay,
-          shouldRetryWithHook
+          shouldRetryWithHook,
+          request
         )
         clearTimeout(timeoutTimer)
         if (effectiveHooks.transformResponse) {

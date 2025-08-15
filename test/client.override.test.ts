@@ -47,18 +47,21 @@ describe('FFetch per-request override', () => {
 
   it('overrides retryDelay per request', async () => {
     const delays: number[] = []
-    const client = createClient({ retryDelay: () => 1 })
+    const client = createClient({ retryDelay: ({ attempt: _attempt }) => 1 })
     mockFetchImpl(new Response('ok'), { failTimes: 2 })
     const origSetTimeout = globalThis.setTimeout
     vi.stubGlobal('setTimeout', (fn, ms) => {
       delays.push(ms)
       return origSetTimeout(fn, 0)
     })
-    await client('http://x', { retries: 2, retryDelay: (a) => 42 + a })
+    await client('http://x', {
+      retries: 2,
+      retryDelay: ({ attempt: _attempt }) => 43 + _attempt,
+    })
     // Only check retry delays (ignore timeout delay, which is >= 1000ms)
     const retryDelays = delays.filter((d) => d < 1000)
-    expect(retryDelays[0]).toBe(43)
-    expect(retryDelays[1]).toBe(44)
+    expect(retryDelays[0]).toBe(44)
+    expect(retryDelays[1]).toBe(45)
   })
 
   it('overrides shouldRetry per request', async () => {
@@ -66,7 +69,7 @@ describe('FFetch per-request override', () => {
     let called = false
     mockFetchImpl(new Response('ok'), { failTimes: 1 })
     await client('http://x', {
-      shouldRetry: (_err) => {
+      shouldRetry: (_ctx) => {
         called = true
         return true
       },
