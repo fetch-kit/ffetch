@@ -1,4 +1,6 @@
 ![npm](https://img.shields.io/npm/v/@gkoos/ffetch)
+![Downloads](https://img.shields.io/npm/dm/@gkoos/ffetch)
+![GitHub stars](https://img.shields.io/github/stars/gkoos/ffetch?style=social)
 ![Build](https://github.com/gkoos/ffetch/actions/workflows/ci.yml/badge.svg)
 ![codecov](https://codecov.io/gh/gkoos/ffetch/branch/main/graph/badge.svg)
 ![MIT](https://img.shields.io/npm/l/@gkoos/ffetch)
