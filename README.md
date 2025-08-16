@@ -1,3 +1,10 @@
+![npm](https://img.shields.io/npm/v/@gkoos/ffetch)
+![Build](https://github.com/gkoos/ffetch/actions/workflows/ci.yml/badge.svg)
+![codecov](https://codecov.io/gh/gkoos/ffetch/branch/main/graph/badge.svg)
+![MIT](https://img.shields.io/npm/l/@gkoos/ffetch)
+![bundlephobia](https://badgen.net/bundlephobia/minzip/@gkoos/ffetch)
+![Types](https://img.shields.io/npm/types/@gkoos/ffetch)
+
 # @gkoos/ffetch
 
 **A production-ready TypeScript-first drop-in replacement for native fetch.**

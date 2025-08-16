@@ -13,4 +13,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run test:ci
-      - uses: codecov/codecov-action@v3
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info
+          fail_ci_if_error: true
