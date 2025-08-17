@@ -1,57 +1,47 @@
-// Custom error classes
-
-export class TimeoutError extends Error {
+// Base error class to reduce duplication
+class BaseError extends Error {
   public cause?: unknown
+  constructor(name: string, message: string, cause?: unknown) {
+    super(message)
+    this.name = name
+    if (cause !== undefined) this.cause = cause
+  }
+}
+
+export class TimeoutError extends BaseError {
   constructor(message = 'Request timed out', cause?: unknown) {
-    super(message)
-    this.name = 'TimeoutError'
-    if (cause !== undefined) this.cause = cause
+    super('TimeoutError', message, cause)
   }
 }
 
-export class CircuitOpenError extends Error {
-  public cause?: unknown
+export class CircuitOpenError extends BaseError {
   constructor(message = 'Circuit is open', cause?: unknown) {
-    super(message)
-    this.name = 'CircuitOpenError'
-    if (cause !== undefined) this.cause = cause
+    super('CircuitOpenError', message, cause)
   }
 }
 
-export class AbortError extends Error {
-  public cause?: unknown
+export class AbortError extends BaseError {
   constructor(message = 'Request was aborted', cause?: unknown) {
-    super(message)
-    this.name = 'AbortError'
-    if (cause !== undefined) this.cause = cause
+    super('AbortError', message, cause)
   }
 }
 
-export class RetryLimitError extends Error {
-  public cause?: unknown
+export class RetryLimitError extends BaseError {
   constructor(message = 'Retry limit reached', cause?: unknown) {
-    super(message)
-    this.name = 'RetryLimitError'
-    if (cause !== undefined) this.cause = cause
+    super('RetryLimitError', message, cause)
   }
 }
 
-export class NetworkError extends Error {
-  public cause?: unknown
+export class NetworkError extends BaseError {
   constructor(message = 'Network error occurred', cause?: unknown) {
-    super(message)
-    this.name = 'NetworkError'
-    if (cause !== undefined) this.cause = cause
+    super('NetworkError', message, cause)
   }
 }
 
-export class ResponseError extends Error {
+export class ResponseError extends BaseError {
   public response: Response
-  public cause?: unknown
   constructor(response: Response, message = 'Response error', cause?: unknown) {
-    super(message)
-    this.name = 'ResponseError'
+    super('ResponseError', message, cause)
     this.response = response
-    if (cause !== undefined) this.cause = cause
   }
 }

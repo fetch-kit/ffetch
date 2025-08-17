@@ -120,22 +120,18 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
           await effectiveHooks.onComplete?.(request, undefined, abortErr)
           throw abortErr
         }
-        // TimeoutError: call onTimeout hook and re-throw
-        if (err instanceof TimeoutError) {
-          await effectiveHooks.onTimeout?.(request)
-          await effectiveHooks.onError?.(request, err)
-          await effectiveHooks.onComplete?.(request, undefined, err)
-          throw err
-        }
-        // NetworkError: re-throw
-        if (err instanceof NetworkError) {
-          await effectiveHooks.onError?.(request, err)
-          await effectiveHooks.onComplete?.(request, undefined, err)
-          throw err
-        }
-        // AbortError: call onAbort hook and re-throw
-        if (err instanceof AbortError) {
-          await effectiveHooks.onAbort?.(request)
+        // If the error is a custom error, re-throw it directly (do not wrap)
+        if (
+          err instanceof TimeoutError ||
+          err instanceof NetworkError ||
+          err instanceof AbortError
+        ) {
+          if (err instanceof TimeoutError) {
+            await effectiveHooks.onTimeout?.(request)
+          }
+          if (err instanceof AbortError) {
+            await effectiveHooks.onAbort?.(request)
+          }
           await effectiveHooks.onError?.(request, err)
           await effectiveHooks.onComplete?.(request, undefined, err)
           throw err
@@ -167,11 +163,9 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
               signal: combinedSignal,
             })
             try {
-              const r = await fetch(reqWithSignal)
-              return r
-            } catch (err: unknown) {
-              await handleError(mapToCustomError(err))
-              throw new Error('Unreachable: handleError should always throw')
+              return await fetch(reqWithSignal)
+            } catch (err) {
+              throw mapToCustomError(err)
             }
           },
           effectiveRetries,
@@ -186,7 +180,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         await effectiveHooks.onComplete?.(request, res, undefined)
         return res
       } catch (err: unknown) {
-        await handleError(mapToCustomError(err))
+        await handleError(err)
         throw new Error('Unreachable: handleError should always throw')
       }
     }

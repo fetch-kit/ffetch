@@ -5,6 +5,7 @@ import createClient, {
   AbortError,
   RetryLimitError,
   NetworkError,
+  ResponseError,
 } from '../src/index.js'
 
 describe('Integration: Custom Errors', () => {
@@ -227,4 +228,51 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
     expect(onTimeout).toHaveBeenCalled()
     expect(onAbort).not.toHaveBeenCalled()
   }, 300)
+
+  it('throws RetryLimitError with default message if error has no string message', async () => {
+    global.fetch = vi.fn().mockRejectedValue(undefined) // or null, or {}
+    const f = createClient({ retries: 0 })
+    try {
+      await f('https://example.com')
+    } catch (err) {
+      expect(err).toBeInstanceOf(RetryLimitError)
+      expect(err.message).toBe('Retry limit reached')
+    }
+  })
+
+  it('throws AbortError if combinedSignal.aborted is true and throwIfAborted is missing', async () => {
+    // Remove AbortSignal.any to force fallback branch
+    const origAny = AbortSignal.any
+    // @ts-expect-error: Simulate missing AbortSignal.any for fallback branch coverage
+    AbortSignal.any = undefined
+
+    // Use a minimal fake signal for branch coverage; cast to AbortSignal for test only
+    const fakeSignal = { aborted: true } as unknown as AbortSignal
+
+    const f = createClient()
+    await expect(
+      f('https://example.com', { signal: fakeSignal })
+    ).rejects.toThrowError(new AbortError('Request was aborted by user'))
+
+    // Restore AbortSignal.any
+    AbortSignal.any = origAny
+  })
+
+  it('sets name, response, and cause', () => {
+    const res = new Response('body', { status: 400 })
+    const err = new ResponseError(res, 'Bad response', 'test-cause')
+    expect(err.name).toBe('ResponseError')
+    expect(err.response).toBe(res)
+    expect(err.cause).toBe('test-cause')
+    expect(err.message).toBe('Bad response')
+  })
+
+  it('works without cause', () => {
+    const res = new Response('body', { status: 400 })
+    const err = new ResponseError(res)
+    expect(err.name).toBe('ResponseError')
+    expect(err.response).toBe(res)
+    expect(err.cause).toBeUndefined()
+    expect(err.message).toBe('Response error')
+  })
 })
