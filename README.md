@@ -19,6 +19,23 @@
 - **Universal** – Node, Browser, Cloudflare Workers, React Native
 - **Zero runtime deps** – ships as dual ESM/CJS
 
+## Prerequisites
+
+`ffetch` requires modern AbortSignal APIs, specifically `AbortSignal.timeout` and `AbortSignal.any`.
+
+- **Node.js:**
+  - Node.js v18.8.0 and above support `AbortSignal.timeout` natively.
+  - Node.js v20.6.0 and above support `AbortSignal.any` natively.
+  - For older Node.js versions, you must install a polyfill such as [`abortcontroller-polyfill`](https://www.npmjs.com/package/abortcontroller-polyfill) or [`abort-controller-x`](https://www.npmjs.com/package/abort-controller-x) and ensure `AbortSignal.timeout` and `AbortSignal.any` are available globally.
+
+- **Browsers:**
+  - Most evergreen browsers (Chrome 88+, Firefox 89+, Safari 15.4+, Edge 88+) support `AbortSignal.timeout` and `AbortSignal.any`.
+  - For older browsers, you must provide a polyfill for these APIs.
+
+If `AbortSignal.timeout` is missing, `ffetch` will throw an error at runtime. See your environment's documentation or use a polyfill to ensure compatibility.
+
+---
+
 ## Install
 
 ```bash
