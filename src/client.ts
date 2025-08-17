@@ -1,6 +1,5 @@
 import type { FFetchOptions, FFetch, FFetchRequestInit } from './types.js'
 import { retry, defaultDelay } from './retry.js'
-// ...existing code...
 import { shouldRetry as defaultShouldRetry } from './should-retry.js'
 import { CircuitBreaker } from './circuit.js'
 import {
@@ -32,47 +31,50 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     input: RequestInfo | URL,
     init: FFetchRequestInit = {}
   ) => {
+    // Check for AbortSignal.timeout before any async logic
+    if (
+      typeof AbortSignal === 'undefined' ||
+      typeof AbortSignal.timeout !== 'function'
+    ) {
+      throw new Error(
+        'AbortSignal.timeout is required. Please use a polyfill for older environments.'
+      )
+    }
+
     let request = new Request(input, init)
-    // ...existing code...
+
     // Merge hooks: per-request hooks override client hooks, but fallback to client hooks
     const effectiveHooks = { ...clientDefaultHooks, ...(init.hooks || {}) }
     if (effectiveHooks.transformRequest) {
       request = await effectiveHooks.transformRequest(request)
     }
     await effectiveHooks.before?.(request)
-    // Combine two signals so abort from either source will abort the request
-    // ...existing code...
+
+    // AbortSignal.timeout/any logic ---
+    const effectiveTimeout = init.timeout ?? clientDefaultTimeout
+    const userSignal = init.signal
+    let timeoutSignal: AbortSignal | undefined = undefined
+    let combinedSignal: AbortSignal | undefined = undefined
+    timeoutSignal = AbortSignal.timeout(effectiveTimeout)
+    if (userSignal) {
+      if (typeof AbortSignal.any === 'function') {
+        combinedSignal = AbortSignal.any([userSignal, timeoutSignal])
+      } else {
+        // Fallback: use userSignal if already aborted, else timeoutSignal
+        combinedSignal = userSignal.aborted ? userSignal : timeoutSignal
+      }
+    } else {
+      combinedSignal = timeoutSignal
+    }
 
     // Restore hook-wrapped retry, enforce global timeout externally
     const retryWithHooks = async () => {
-      const effectiveTimeout = init.timeout ?? clientDefaultTimeout
       const effectiveRetries = init.retries ?? clientDefaultRetries
       const effectiveRetryDelay =
         typeof init.retryDelay !== 'undefined'
           ? init.retryDelay
           : clientDefaultRetryDelay
       const effectiveShouldRetry = init.shouldRetry ?? clientDefaultShouldRetry
-
-      // Global timeout controller and elapsed time tracking
-      const timeoutCtrl = new AbortController()
-      const startTime = Date.now()
-      let didTimeout = false
-      const timeoutTimer = setTimeout(() => {
-        didTimeout = true
-        timeoutCtrl.abort()
-      }, effectiveTimeout)
-
-      // Compose user and timeout signals
-      const userSignal = init.signal || undefined
-      function combinedSignal() {
-        if (!userSignal) return timeoutCtrl.signal
-        if (userSignal.aborted) {
-          timeoutCtrl.abort()
-          return timeoutCtrl.signal
-        }
-        userSignal.addEventListener('abort', () => timeoutCtrl.abort())
-        return timeoutCtrl.signal
-      }
 
       // Wrap shouldRetry to call onRetry hook
       let attempt = 0
@@ -90,71 +92,50 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         return retrying
       }
 
-      try {
-        let res = await retry(
-          async () => {
-            // Check elapsed time before each attempt
-            const elapsed = Date.now() - startTime
-            if (elapsed >= effectiveTimeout) {
-              didTimeout = true
-              await effectiveHooks.onTimeout?.(request)
-              throw new TimeoutError('Request timed out')
-            }
-            const reqWithSignal = new Request(request, {
-              signal: combinedSignal(),
-            })
-            try {
-              const r = await fetch(reqWithSignal)
-              return r
-            } catch (err: unknown) {
-              if (err instanceof DOMException && err.name === 'AbortError') {
-                // Check elapsed time after abort
-                const elapsedAbort = Date.now() - startTime
-                if (userSignal?.aborted) {
-                  await effectiveHooks.onAbort?.(request)
-                  throw new AbortError('Request was aborted')
-                } else if (didTimeout || elapsedAbort >= effectiveTimeout) {
-                  await effectiveHooks.onTimeout?.(request)
-                  throw new TimeoutError('Request timed out')
-                } else {
-                  throw new AbortError('Request was aborted')
-                }
-              } else if (
-                err instanceof Error &&
-                (err.message.includes('timeout') || err.name === 'TimeoutError')
-              ) {
-                await effectiveHooks.onTimeout?.(request)
-                throw new TimeoutError(err.message)
-              } else if (
-                err instanceof TypeError &&
-                err.message &&
-                err.message.includes('NetworkError')
-              ) {
-                throw new NetworkError(err.message)
-              }
-              throw err
-            }
-          },
-          effectiveRetries,
-          effectiveRetryDelay,
-          shouldRetryWithHook,
-          request
-        )
-        clearTimeout(timeoutTimer)
-        if (effectiveHooks.transformResponse) {
-          res = await effectiveHooks.transformResponse(res, request)
-        }
-        await effectiveHooks.after?.(request, res)
-        await effectiveHooks.onComplete?.(request, res, undefined)
-        return res
-      } catch (err: unknown) {
-        clearTimeout(timeoutTimer)
-        // If the error is a known custom error, re-throw it directly
-        if (
-          err instanceof TimeoutError ||
-          err instanceof AbortError ||
-          err instanceof NetworkError
+      function mapToCustomError(err: unknown): unknown {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          if (timeoutSignal?.aborted && (!userSignal || !userSignal.aborted)) {
+            return new TimeoutError('signal timed out', err)
+          } else {
+            return new AbortError('Request was aborted', err)
+          }
+        } else if (
+          err instanceof TypeError &&
+          /NetworkError|network error|failed to fetch|lost connection|NetworkError when attempting to fetch resource/i.test(
+            err.message
+          )
         ) {
+          return new NetworkError(err.message, err)
+        }
+        return err
+      }
+
+      async function handleError(err: unknown): Promise<never> {
+        err = mapToCustomError(err)
+        // If user aborted, always throw AbortError, not RetryLimitError
+        if (userSignal?.aborted) {
+          const abortErr = new AbortError('Request was aborted by user')
+          await effectiveHooks.onAbort?.(request)
+          await effectiveHooks.onError?.(request, abortErr)
+          await effectiveHooks.onComplete?.(request, undefined, abortErr)
+          throw abortErr
+        }
+        // TimeoutError: call onTimeout hook and re-throw
+        if (err instanceof TimeoutError) {
+          await effectiveHooks.onTimeout?.(request)
+          await effectiveHooks.onError?.(request, err)
+          await effectiveHooks.onComplete?.(request, undefined, err)
+          throw err
+        }
+        // NetworkError: re-throw
+        if (err instanceof NetworkError) {
+          await effectiveHooks.onError?.(request, err)
+          await effectiveHooks.onComplete?.(request, undefined, err)
+          throw err
+        }
+        // AbortError: call onAbort hook and re-throw
+        if (err instanceof AbortError) {
+          await effectiveHooks.onAbort?.(request)
           await effectiveHooks.onError?.(request, err)
           await effectiveHooks.onComplete?.(request, undefined, err)
           throw err
@@ -172,9 +153,44 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         await effectiveHooks.onComplete?.(request, undefined, retryErr)
         throw retryErr
       }
+
+      try {
+        let res = await retry(
+          async () => {
+            // Use AbortSignal.throwIfAborted() before starting fetch
+            if (typeof combinedSignal?.throwIfAborted === 'function') {
+              combinedSignal.throwIfAborted()
+            } else if (combinedSignal?.aborted) {
+              throw new AbortError('Request was aborted')
+            }
+            const reqWithSignal = new Request(request, {
+              signal: combinedSignal,
+            })
+            try {
+              const r = await fetch(reqWithSignal)
+              return r
+            } catch (err: unknown) {
+              await handleError(mapToCustomError(err))
+              throw new Error('Unreachable: handleError should always throw')
+            }
+          },
+          effectiveRetries,
+          effectiveRetryDelay,
+          shouldRetryWithHook,
+          request
+        )
+        if (effectiveHooks.transformResponse) {
+          res = await effectiveHooks.transformResponse(res, request)
+        }
+        await effectiveHooks.after?.(request, res)
+        await effectiveHooks.onComplete?.(request, res, undefined)
+        return res
+      } catch (err: unknown) {
+        await handleError(mapToCustomError(err))
+        throw new Error('Unreachable: handleError should always throw')
+      }
     }
 
-    // ...replaced above...
     if (breaker) {
       try {
         return await breaker.invoke(retryWithHooks)

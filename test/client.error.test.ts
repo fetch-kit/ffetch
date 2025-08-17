@@ -20,7 +20,9 @@ describe('Integration: Custom Errors', () => {
       })
     })
     const f = createClient({ timeout: 20 })
-    await expect(f('https://example.com')).rejects.toThrow(TimeoutError)
+    await expect(f('https://example.com')).rejects.toSatisfy((err) => {
+      return err instanceof TimeoutError && err.cause instanceof DOMException
+    })
   }, 200)
 
   it('throws AbortError on user abort', async () => {
@@ -39,7 +41,15 @@ describe('Integration: Custom Errors', () => {
     setTimeout(() => controller.abort(), 20)
     await expect(
       f('https://example.com', { signal: controller.signal })
-    ).rejects.toThrow(AbortError)
+    ).rejects.toSatisfy((err) => {
+      return (
+        err instanceof AbortError &&
+        ((err.message === 'Request was aborted by user' &&
+          err.cause === undefined) ||
+          (err.message === 'Request was aborted' &&
+            err.cause instanceof DOMException))
+      )
+    })
   }, 200)
 
   it('throws CircuitOpenError when circuit is open', async () => {
@@ -60,13 +70,14 @@ describe('Integration: Custom Errors', () => {
   })
 
   it('throws NetworkError on network error', async () => {
-    global.fetch = vi
-      .fn()
-      .mockRejectedValue(
-        new TypeError('NetworkError when attempting to fetch resource.')
-      )
+    const nativeErr = new TypeError(
+      'NetworkError when attempting to fetch resource.'
+    )
+    global.fetch = vi.fn().mockRejectedValue(nativeErr)
     const f = createClient()
-    await expect(f('https://example.com')).rejects.toThrow(NetworkError)
+    await expect(f('https://example.com')).rejects.toSatisfy((err) => {
+      return err instanceof NetworkError && err.cause === nativeErr
+    })
   })
 })
 
@@ -82,7 +93,9 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
     const f = createClient({ timeout: 10, retries: 1 })
     // Accept either TimeoutError or AbortError due to timing differences in CI/Node environments
     await expect(f('https://example.com')).rejects.toSatisfy(
-      (err) => err instanceof TimeoutError || err instanceof AbortError
+      (err) =>
+        (err instanceof TimeoutError && err.cause instanceof DOMException) ||
+        (err instanceof AbortError && err.cause instanceof DOMException)
     )
     // If the timeout is too short, only 1 attempt may be made
     expect(attempts).toBeGreaterThanOrEqual(1)
@@ -113,17 +126,24 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
     await expect(
       f('https://example.com', { signal: controller.signal })
     ).rejects.toSatisfy(
-      (err) => err instanceof AbortError || err instanceof TimeoutError
+      (err) =>
+        (err instanceof AbortError &&
+          ((err.message === 'Request was aborted by user' &&
+            err.cause === undefined) ||
+            (err.message === 'Request was aborted' &&
+              err.cause instanceof DOMException))) ||
+        (err instanceof TimeoutError && err.cause instanceof DOMException)
     )
     expect(abortFired).toBe(true)
   }, 1000)
 
   it('NetworkError: thrown for different network error messages', async () => {
-    global.fetch = vi
-      .fn()
-      .mockRejectedValue(new TypeError('NetworkError: lost connection'))
+    const nativeErr = new TypeError('NetworkError: lost connection')
+    global.fetch = vi.fn().mockRejectedValue(nativeErr)
     const f = createClient()
-    await expect(f('https://example.com')).rejects.toThrow(NetworkError)
+    await expect(f('https://example.com')).rejects.toSatisfy((err) => {
+      return err instanceof NetworkError && err.cause === nativeErr
+    })
   })
 
   it('NetworkError: not thrown for HTTP errors', async () => {

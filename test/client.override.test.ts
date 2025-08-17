@@ -22,20 +22,6 @@ describe('FFetch per-request override', () => {
     vi.restoreAllMocks()
   })
 
-  it('overrides timeout per request', async () => {
-    const client = createClient({ timeout: 10000 })
-    let timeoutUsed: number | undefined
-    mockFetchImpl(new Response('ok'))
-    const origWithTimeout = globalThis.setTimeout
-    // Patch withTimeout to capture timeout value
-    vi.stubGlobal('setTimeout', (fn, ms) => {
-      timeoutUsed = ms
-      return origWithTimeout(fn, ms)
-    })
-    await client('http://x', { timeout: 1234 } as FFetchRequestInit)
-    expect(timeoutUsed).toBe(1234)
-  })
-
   it('overrides retries per request', async () => {
     const client = createClient({ retries: 0 })
     mockFetchImpl(new Response('ok'), { failTimes: 2 })

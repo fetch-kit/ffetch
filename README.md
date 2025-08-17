@@ -154,7 +154,14 @@ shouldRetry: ({ attempt, request, response, error }) => {
 
 ### Custom Error Types
 
-`ffetch` throws custom error classes for robust error handling. You can catch and handle these errors as needed:
+`ffetch` throws custom error classes for robust error handling. All custom errors have a `.cause` property:
+
+- If the error is mapped from a native error (e.g., a DOMException or TypeError from fetch), `.cause` will reference the original error.
+- If the error is user-initiated (e.g., user aborts a request), `.cause` will be `undefined`.
+
+This allows you to inspect the underlying cause for advanced debugging or cross-environment handling.
+
+You can catch and handle these errors as needed:
 
 - `TimeoutError`: The request timed out.
 - `AbortError`: The request was aborted by the user.

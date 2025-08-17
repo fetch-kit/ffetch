@@ -21,6 +21,19 @@ it('aborts after 50 ms', async () => {
   await expect(f('https://example.com')).rejects.toThrow()
 })
 
+it('throws if AbortSignal.timeout is missing', async () => {
+  const origTimeout = AbortSignal.timeout
+  // @ts-expect-error: Simulate missing AbortSignal.timeout for coverage
+  AbortSignal.timeout = undefined
+  const client = createClient()
+  const p = expect(client('http://x')).rejects.toThrow(
+    /AbortSignal\.timeout is required/
+  )
+  return p.finally(() => {
+    AbortSignal.timeout = origTimeout
+  })
+})
+
 describe('retry', () => {
   it('retries 2 times and then succeeds', async () => {
     let calls = 0
