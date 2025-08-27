@@ -1,5 +1,12 @@
 # ffetch
 
+## 1.2.0
+
+### Minor Changes
+
+- c6f94fb: Added:
+  - Support for the HTTP Retry-After header in the default retry logic. If a server responds with a Retry-After header (in seconds or as a date), ffetch will honor it and use the specified delay before retrying.
+
 ## 1.1.0
 
 ### Minor Changes
