@@ -2,8 +2,16 @@ import type { RetryContext } from './types.js'
 
 export type RetryDelay = number | ((ctx: RetryContext) => number)
 
-export const defaultDelay: RetryDelay = (ctx) =>
-  2 ** ctx.attempt * 200 + Math.random() * 100
+export const defaultDelay: RetryDelay = (ctx) => {
+  const retryAfter = ctx.response?.headers.get('Retry-After')
+  if (retryAfter) {
+    const seconds = parseInt(retryAfter, 10)
+    if (!isNaN(seconds)) return seconds * 1000
+    const date = Date.parse(retryAfter)
+    if (!isNaN(date)) return Math.max(0, date - Date.now())
+  }
+  return 2 ** ctx.attempt * 200 + Math.random() * 100
+}
 
 export async function retry(
   fn: () => Promise<Response>,

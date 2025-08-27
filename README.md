@@ -169,6 +169,10 @@ shouldRetry: ({ attempt, request, response, error }) => {
 }
 ```
 
+### Retry-After Header Support
+
+By default, if the server responds with a `Retry-After` header (either in seconds or as a date), `ffetch` will honor it and use it as the delay before the next retry. This behavior is built into the default retry logic and can be customized via the `retryDelay` option.
+
 ### Custom Error Types
 
 `ffetch` throws custom error classes for robust error handling. All custom errors have a `.cause` property:

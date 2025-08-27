@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 
 import { createClient } from '../src/client.js'
+import { defaultDelay } from '../src/retry.js'
 
 it('aborts after 50 ms', async () => {
   global.fetch = vi.fn().mockImplementation(async (input) => {
@@ -144,5 +145,42 @@ describe('custom shouldRetry', () => {
     const res = await f('https://example.com')
     expect(res.status).toBe(400)
     expect(global.fetch).toHaveBeenCalledTimes(1) // no retry
+  })
+})
+
+describe('Retry-After header', () => {
+  it('respects Retry-After header (seconds)', () => {
+    const response = new Response('', { status: 429 })
+    Object.defineProperty(response, 'headers', {
+      value: {
+        get: (name: string) => (name === 'Retry-After' ? '2' : undefined),
+      },
+    })
+    const ctx = { attempt: 1, request: new Request('x'), response }
+    const delay =
+      typeof defaultDelay === 'function' ? defaultDelay(ctx) : defaultDelay
+    expect(delay).toBe(2000)
+  })
+
+  it('respects Retry-After header (date)', () => {
+    // Mock Date.now for deterministic test
+    const fixedNow = 2000000000000 // some fixed timestamp
+    const originalNow = Date.now
+    Date.now = () => fixedNow
+    try {
+      const date = new Date(fixedNow + 5000).toUTCString()
+      const response = new Response('', { status: 429 })
+      Object.defineProperty(response, 'headers', {
+        value: {
+          get: (name: string) => (name === 'Retry-After' ? date : undefined),
+        },
+      })
+      const ctx = { attempt: 1, request: new Request('x'), response }
+      const delay =
+        typeof defaultDelay === 'function' ? defaultDelay(ctx) : defaultDelay
+      expect(delay).toBe(5000)
+    } finally {
+      Date.now = originalNow
+    }
   })
 })
