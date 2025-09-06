@@ -67,8 +67,19 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       if (typeof AbortSignal.any === 'function') {
         combinedSignal = AbortSignal.any([userSignal, timeoutSignal])
       } else {
-        // Fallback: use userSignal if already aborted, else timeoutSignal
-        combinedSignal = userSignal.aborted ? userSignal : timeoutSignal
+        // Manual fallback: create a controller that aborts when either signal aborts
+        const controller = new AbortController()
+        combinedSignal = controller.signal
+
+        // If either signal is already aborted, abort immediately
+        if (userSignal.aborted || timeoutSignal.aborted) {
+          controller.abort()
+        } else {
+          // Listen for abort events on both signals
+          const abortHandler = () => controller.abort()
+          userSignal.addEventListener('abort', abortHandler, { once: true })
+          timeoutSignal.addEventListener('abort', abortHandler, { once: true })
+        }
       }
     } else {
       combinedSignal = timeoutSignal
