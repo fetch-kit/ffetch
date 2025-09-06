@@ -37,11 +37,3 @@ export class NetworkError extends BaseError {
     super('NetworkError', message, cause)
   }
 }
-
-export class ResponseError extends BaseError {
-  public response: Response
-  constructor(response: Response, message = 'Response error', cause?: unknown) {
-    super('ResponseError', message, cause)
-    this.response = response
-  }
-}

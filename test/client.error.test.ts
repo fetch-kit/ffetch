@@ -7,7 +7,6 @@ import createClient, {
   AbortError,
   RetryLimitError,
   NetworkError,
-  ResponseError,
 } from '../src/index.js'
 
 describe('Integration: Custom Errors', () => {
@@ -258,23 +257,5 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
 
     // Restore AbortSignal.any
     AbortSignal.any = origAny
-  })
-
-  it('sets name, response, and cause', () => {
-    const res = new Response('body', { status: 400 })
-    const err = new ResponseError(res, 'Bad response', 'test-cause')
-    expect(err.name).toBe('ResponseError')
-    expect(err.response).toBe(res)
-    expect(err.cause).toBe('test-cause')
-    expect(err.message).toBe('Bad response')
-  })
-
-  it('works without cause', () => {
-    const res = new Response('body', { status: 400 })
-    const err = new ResponseError(res)
-    expect(err.name).toBe('ResponseError')
-    expect(err.response).toBe(res)
-    expect(err.cause).toBeUndefined()
-    expect(err.message).toBe('Response error')
   })
 })

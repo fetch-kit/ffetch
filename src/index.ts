@@ -10,7 +10,6 @@ export {
   AbortError,
   RetryLimitError,
   NetworkError,
-  ResponseError,
 } from './error'
 
 export default createClient
