@@ -13,6 +13,14 @@
   - Configuration parameters and defaults
   - TypeScript interfaces and types
 
+### **Getting Started**
+
+- **[migration.md](./migration.md)** - Migration guide from native fetch to ffetch
+  - Drop-in replacement patterns
+  - Error handling differences
+  - New capabilities and features
+  - TypeScript migration tips
+
 ### **Advanced Features**
 
 - **[advanced.md](./advanced.md)** - Advanced patterns and features
@@ -60,6 +68,7 @@
 | Goal                           | Documentation                                                |
 | ------------------------------ | ------------------------------------------------------------ |
 | Get started quickly            | [README.md](../README.md)                                    |
+| Migrate from native fetch      | [migration.md](./migration.md)                               |
 | See all configuration options  | [api.md](./api.md)                                           |
 | Handle errors gracefully       | [advanced.md](./advanced.md#custom-error-handling)           |
 | Add authentication to requests | [hooks.md](./hooks.md#authentication)                        |
