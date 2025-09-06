@@ -215,4 +215,57 @@ describe('Hooks', () => {
     await expect(requestPromise).rejects.toThrow('aborted')
     expect(transformRequest).toHaveBeenCalled()
   })
+
+  it('transformRequest not changing signal does not cause duplication', async () => {
+    const userController = new AbortController()
+    let abortListenerCount = 0
+
+    const transformRequest = vi.fn(async (req: Request) => {
+      // Transform request but keep the same signal (this should not cause duplication)
+      return new Request(req, {
+        headers: { ...Object.fromEntries(req.headers), 'x-test': '1' },
+        signal: req.signal, // Keep the same signal reference
+      })
+    })
+
+    global.fetch = vi.fn().mockImplementation(async (input) => {
+      const signal = input instanceof Request ? input.signal : undefined
+
+      // Count how many times abort handler is called
+      if (signal) {
+        signal.addEventListener('abort', () => {
+          abortListenerCount++
+        })
+      }
+
+      return new Promise((_resolve, reject) => {
+        if (signal && signal.aborted) {
+          reject(new DOMException('aborted', 'AbortError'))
+        } else if (signal) {
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        }
+        // Don't resolve - we'll abort before it completes
+      })
+    })
+
+    const client = createClient({
+      timeout: 10000, // Long timeout
+      hooks: { transformRequest },
+    })
+
+    const requestPromise = client('https://example.com', {
+      signal: userController.signal,
+    })
+
+    // Abort via the user signal
+    setTimeout(() => userController.abort(), 10)
+
+    await expect(requestPromise).rejects.toThrow('aborted')
+    expect(transformRequest).toHaveBeenCalled()
+
+    // The abort listener should only be called once, not twice due to signal duplication
+    expect(abortListenerCount).toBe(1)
+  })
 })

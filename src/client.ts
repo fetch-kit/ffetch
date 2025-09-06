@@ -82,7 +82,9 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     // Collect all signals that need to be combined
     const signals: AbortSignal[] = []
     if (userSignal) signals.push(userSignal)
-    if (transformedSignal) signals.push(transformedSignal)
+    if (transformedSignal && transformedSignal !== userSignal) {
+      signals.push(transformedSignal)
+    }
     if (timeoutSignal) signals.push(timeoutSignal)
 
     if (signals.length === 0) {
