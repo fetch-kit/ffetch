@@ -13,7 +13,7 @@
 
 **A production-ready TypeScript-first drop-in replacement for native fetch.**
 
-✨ **Key Features:**
+**Key Features:**
 
 - **Timeouts** – per-request or global
 - **Retries** – exponential backoff + jitter
