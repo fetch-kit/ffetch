@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'happy-dom', // fetch in browser-like env
-    coverage: { reporter: ['text', 'lcov'] },
+    coverage: {
+      reporter: ['text', 'lcov', 'html'],
+      exclude: ['coverage/**', 'dist/**', '**/*.config.*', '**/*.test.*'],
+    },
   },
 })

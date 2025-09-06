@@ -13,9 +13,24 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run test:ci
+      - name: Debug coverage files
+        run: |
+          echo "Coverage directory contents:"
+          ls -la coverage/ || dir coverage\
+          echo "LCOV file size:"
+          wc -c coverage/lcov.info || (Get-Item coverage\lcov.info).Length
+          echo "LCOV file first 10 lines:"
+          head -10 coverage/lcov.info || Get-Content coverage\lcov.info | Select-Object -First 10
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: true
+          file: ./coverage/lcov.info
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
+      - name: Upload coverage to Codecov (fallback)
+        if: failure()
+        run: |
+          curl -Os https://cli.codecov.io/latest/linux/codecov
+          chmod +x codecov
+          ./codecov --verbose upload-process --fail-on-error --file ./coverage/lcov.info --token ${{ secrets.CODECOV_TOKEN }}
