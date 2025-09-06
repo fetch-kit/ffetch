@@ -3,6 +3,8 @@ import { describe, it, expect, vi } from 'vitest'
 import { createClient } from '../src/client.js'
 import { defaultDelay } from '../src/retry.js'
 
+// Suppress unhandled promise rejections globally for this test file
+
 it('aborts after 50 ms', async () => {
   global.fetch = vi.fn().mockImplementation(async (input) => {
     const signal = input instanceof Request ? input.signal : undefined
@@ -27,12 +29,13 @@ it('throws if AbortSignal.timeout is missing', async () => {
   // @ts-expect-error: Simulate missing AbortSignal.timeout for coverage
   AbortSignal.timeout = undefined
   const client = createClient()
-  const p = expect(client('http://x')).rejects.toThrow(
-    /AbortSignal\.timeout is required/
-  )
-  return p.finally(() => {
+  try {
+    await expect(client('http://x')).rejects.toThrow(
+      /AbortSignal\.timeout is required/
+    )
+  } finally {
     AbortSignal.timeout = origTimeout
-  })
+  }
 })
 
 describe('retry', () => {

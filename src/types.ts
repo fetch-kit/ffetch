@@ -16,9 +16,15 @@ export interface FFetchOptions {
   hooks?: Hooks
 }
 
-export type FFetch = (
-  input: RequestInfo | URL,
-  init?: FFetchRequestInit
-) => Promise<Response>
+export type FFetch = {
+  (input: RequestInfo | URL, init?: FFetchRequestInit): Promise<Response>
+  pendingRequests: PendingRequest[]
+}
 
 export interface FFetchRequestInit extends RequestInit, FFetchOptions {}
+
+export type PendingRequest = {
+  promise: Promise<Response>
+  request: Request
+  signal: AbortSignal
+}

@@ -1,3 +1,5 @@
+// Suppress unhandled promise rejections globally for this test file
+
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import type { FFetchRequestInit } from '../src/types.js'
 import { createClient } from '../src/client.js'
@@ -10,10 +12,11 @@ function mockFetchImpl(
   globalThis.fetch = vi.fn(async (..._args: unknown[]) => {
     if (opts.failTimes && callCount < opts.failTimes) {
       callCount++
-      throw new Error('fail')
+      return Promise.reject(new Error('fail'))
     }
-    if (typeof responseOrImpl === 'function') return responseOrImpl(..._args)
-    return responseOrImpl
+    if (typeof responseOrImpl === 'function')
+      return Promise.resolve(responseOrImpl(..._args))
+    return Promise.resolve(responseOrImpl)
   }) as typeof fetch
 }
 

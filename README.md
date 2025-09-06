@@ -1,8 +1,10 @@
 ![npm](https://img.shields.io/npm/v/@gkoos/ffetch)
 ![Downloads](https://img.shields.io/npm/dm/@gkoos/ffetch)
 ![GitHub stars](https://img.shields.io/github/stars/gkoos/ffetch?style=social)
+
 ![Build](https://github.com/gkoos/ffetch/actions/workflows/ci.yml/badge.svg)
 ![codecov](https://codecov.io/gh/gkoos/ffetch/branch/main/graph/badge.svg)
+
 ![MIT](https://img.shields.io/npm/l/@gkoos/ffetch)
 ![bundlephobia](https://badgen.net/bundlephobia/minzip/@gkoos/ffetch)
 ![Types](https://img.shields.io/npm/types/@gkoos/ffetch)
@@ -141,6 +143,48 @@ await f('https://api.example.com/v1/metrics', {
   },
 })
 ```
+
+### Pending Requests
+
+You can access and monitor all active requests through the `pendingRequests` property on the client instance:
+
+```typescript
+const client = createClient()
+
+// Start some requests
+const promise1 = client('https://api.example.com/users')
+const promise2 = client('https://api.example.com/posts')
+
+// Monitor active requests
+console.log(`${client.pendingRequests.length} requests in flight`)
+
+client.pendingRequests.forEach((pending) => {
+  console.log({
+    url: pending.request.url,
+    method: pending.request.method,
+    isAborted: pending.signal.aborted,
+  })
+})
+
+// Example: Abort all pending requests on page unload
+window.addEventListener('beforeunload', () => {
+  // Note: To abort, you need to use the original AbortController
+  // pending.signal is read-only, but you can check its state
+})
+
+// Example: Wait for all pending requests to complete
+await Promise.allSettled(
+  client.pendingRequests.map((pending) => pending.promise)
+)
+```
+
+Each pending request object contains:
+
+- `promise` - The Promise<Response> for the request
+- `request` - The Request object with URL, headers, method, etc.
+- `signal` - The AbortSignal being used (read-only)
+
+Requests are automatically added when they start and removed when they complete (success or failure). Each client instance maintains its own separate `pendingRequests` array.
 
 ### Retry/Backoff and Retry Policy
 

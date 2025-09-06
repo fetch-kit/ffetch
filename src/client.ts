@@ -1,4 +1,9 @@
-import type { FFetchOptions, FFetch, FFetchRequestInit } from './types.js'
+import type {
+  FFetchOptions,
+  FFetch,
+  FFetchRequestInit,
+  PendingRequest,
+} from './types.js'
 import { retry, defaultDelay } from './retry.js'
 import { shouldRetry as defaultShouldRetry } from './should-retry.js'
 import { CircuitBreaker } from './circuit.js'
@@ -26,6 +31,8 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         clientDefaultCircuit.reset
       )
     : null
+
+  const pendingRequests: PendingRequest[] = []
 
   const client: FFetch = async (
     input: RequestInfo | URL,
@@ -185,24 +192,33 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       }
     }
 
-    if (breaker) {
-      try {
-        return await breaker.invoke(retryWithHooks)
-      } catch (err: unknown) {
-        if (err instanceof CircuitOpenError) {
-          await effectiveHooks.onCircuitOpen?.(request)
-          await effectiveHooks.onError?.(request, err)
-          await effectiveHooks.onComplete?.(request, undefined, err)
+    const promise = breaker
+      ? breaker.invoke(retryWithHooks).catch(async (err: unknown) => {
+          if (err instanceof CircuitOpenError) {
+            await effectiveHooks.onCircuitOpen?.(request)
+            await effectiveHooks.onError?.(request, err)
+            await effectiveHooks.onComplete?.(request, undefined, err)
+          } else {
+            await effectiveHooks.onError?.(request, err)
+            await effectiveHooks.onComplete?.(request, undefined, err)
+          }
           throw err
-        }
-        await effectiveHooks.onError?.(request, err)
-        await effectiveHooks.onComplete?.(request, undefined, err)
-        throw err
+        })
+      : retryWithHooks()
+
+    const entry: PendingRequest = { promise, request, signal: combinedSignal! }
+    pendingRequests.push(entry)
+
+    return promise.finally(() => {
+      const index = pendingRequests.indexOf(entry)
+      if (index > -1) {
+        pendingRequests.splice(index, 1)
       }
-    } else {
-      return retryWithHooks()
-    }
+    })
   }
+
+  // Add pendingRequests property to the client function
+  client.pendingRequests = pendingRequests
 
   return client
 }

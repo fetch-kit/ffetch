@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+
 import { createClient } from '../src/client.js'
 
 describe('CircuitBreaker', () => {
@@ -20,7 +21,7 @@ describe('CircuitBreaker', () => {
     await expect(f('https://example.com')).rejects.toThrow('Circuit is open')
 
     // Wait for reset timeout
-    await new Promise((r) => setTimeout(r, 220))
+    await new Promise((r) => setTimeout(r, 220)).catch(() => {})
 
     // Next call should try again (and fail)
     await expect(f('https://example.com')).rejects.toThrow('fail')
@@ -66,7 +67,7 @@ describe('CircuitBreaker', () => {
     // Circuit opens
     await expect(f('https://c.com')).rejects.toThrow('Circuit is open')
     // Wait for reset
-    await new Promise((r) => setTimeout(r, 120))
+    await new Promise((r) => setTimeout(r, 120)).catch(() => {})
     // Should try again
     await expect(f('https://c.com')).rejects.toThrow('fail')
     expect(callCount).toBe(2)
@@ -86,7 +87,7 @@ describe('CircuitBreaker', () => {
     await expect(f('https://d.com')).rejects.toThrow('fail')
     await expect(f('https://d.com')).rejects.toThrow('fail')
     // Circuit is now open, wait for reset
-    await new Promise((r) => setTimeout(r, 120))
+    await new Promise((r) => setTimeout(r, 120)).catch(() => {})
     // Now succeed
     fail = false
     await expect(f('https://d.com')).resolves.toBeInstanceOf(Response)

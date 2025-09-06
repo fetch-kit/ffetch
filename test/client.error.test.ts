@@ -1,3 +1,5 @@
+// Suppress unhandled promise rejections globally for this test file
+
 import { describe, it, expect, vi } from 'vitest'
 import createClient, {
   TimeoutError,
