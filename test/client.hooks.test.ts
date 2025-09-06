@@ -129,4 +129,90 @@ describe('Hooks', () => {
     expect(transformResponse).toHaveBeenCalled()
     expect(body).toBe('original-transformed')
   })
+
+  it('transformRequest signal is properly combined with other signals', async () => {
+    // Create controllers for user signal and transformRequest signal
+    const userController = new AbortController()
+    const transformController = new AbortController()
+
+    const transformRequest = vi.fn(async (req: Request) => {
+      // Transform request and add a different signal
+      return new Request(req, {
+        signal: transformController.signal,
+      })
+    })
+
+    global.fetch = vi.fn().mockImplementation(async (input) => {
+      const signal = input instanceof Request ? input.signal : undefined
+
+      return new Promise((_resolve, reject) => {
+        if (signal && signal.aborted) {
+          reject(new DOMException('aborted', 'AbortError'))
+        } else if (signal) {
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        }
+        // Don't resolve - we'll abort before it completes
+      })
+    })
+
+    const client = createClient({
+      timeout: 10000, // Long timeout
+      hooks: { transformRequest },
+    })
+
+    const requestPromise = client('https://example.com', {
+      signal: userController.signal,
+    })
+
+    // Abort via the transformRequest signal - this should abort the request
+    setTimeout(() => transformController.abort(), 10)
+
+    await expect(requestPromise).rejects.toThrow('aborted')
+    expect(transformRequest).toHaveBeenCalled()
+  })
+
+  it('user signal can still abort when transformRequest has signal', async () => {
+    // Create controllers for user signal and transformRequest signal
+    const userController = new AbortController()
+    const transformController = new AbortController()
+
+    const transformRequest = vi.fn(async (req: Request) => {
+      // Transform request and add a different signal
+      return new Request(req, {
+        signal: transformController.signal,
+      })
+    })
+
+    global.fetch = vi.fn().mockImplementation(async (input) => {
+      const signal = input instanceof Request ? input.signal : undefined
+
+      return new Promise((_resolve, reject) => {
+        if (signal && signal.aborted) {
+          reject(new DOMException('aborted', 'AbortError'))
+        } else if (signal) {
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        }
+        // Don't resolve - we'll abort before it completes
+      })
+    })
+
+    const client = createClient({
+      timeout: 10000, // Long timeout
+      hooks: { transformRequest },
+    })
+
+    const requestPromise = client('https://example.com', {
+      signal: userController.signal,
+    })
+
+    // Abort via the user signal - this should abort the request
+    setTimeout(() => userController.abort(), 10)
+
+    await expect(requestPromise).rejects.toThrow('aborted')
+    expect(transformRequest).toHaveBeenCalled()
+  })
 })

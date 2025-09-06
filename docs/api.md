@@ -16,14 +16,14 @@ const client = createClient({
 
 ### Configuration Options
 
-| Option        | Type                                                                                                                      | Default                             | Description                           |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------- |
-| `timeout`     | `number` (ms)                                                                                                             | `5000`                              | Whole-request timeout in milliseconds |
-| `retries`     | `number`                                                                                                                  | `0`                                 | Maximum retry attempts                |
-| `retryDelay`  | `number \| (ctx: { attempt, request, response, error }) => number`                                                        | Exponential backoff + jitter        | Delay between retries                 |
-| `shouldRetry` | `(ctx: { attempt, request, response, error }) => boolean`                                                                 | Retries on network errors, 5xx, 429 | Custom retry logic                    |
-| `circuit`     | `{ threshold: number, reset: number }`                                                                                    | `undefined`                         | Circuit-breaker configuration         |
-| `hooks`       | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete, transformRequest, transformResponse }` | `{}`                                | Lifecycle hooks and transformers      |
+| Option        | Type                                                                                                                      | Default                             | Description                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------- |
+| `timeout`     | `number` (ms)                                                                                                             | `5000`                              | Whole-request timeout in milliseconds. Use `0` to disable timeout |
+| `retries`     | `number`                                                                                                                  | `0`                                 | Maximum retry attempts                                            |
+| `retryDelay`  | `number \| (ctx: { attempt, request, response, error }) => number`                                                        | Exponential backoff + jitter        | Delay between retries                                             |
+| `shouldRetry` | `(ctx: { attempt, request, response, error }) => boolean`                                                                 | Retries on network errors, 5xx, 429 | Custom retry logic                                                |
+| `circuit`     | `{ threshold: number, reset: number }`                                                                                    | `undefined`                         | Circuit-breaker configuration                                     |
+| `hooks`       | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete, transformRequest, transformResponse }` | `{}`                                | Lifecycle hooks and transformers                                  |
 
 ### Return Type
 

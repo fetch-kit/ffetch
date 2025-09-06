@@ -13,7 +13,15 @@ await client('https://api.example.com/v1/users', {
   retries: 5, // up to 5 retries for this request
 })
 
-// Use a custom retry delay function for a single request
+// Disable timeout entirely for long-running operations
+await client('https://api.example.com/v1/long-process', {
+  timeout: 0, // No timeout - request can run indefinitely
+})
+```
+
+> **Note**: Setting `timeout: 0` disables the timeout entirely, allowing requests to run indefinitely. This is useful for streaming operations, large file uploads, or long-running processes.
+
+```typescript
 await client('https://api.example.com/v1/data', {
   retryDelay: ({ attempt }) => 100 * attempt, // linear backoff for this request
 })

@@ -24,15 +24,28 @@ it('aborts after 50 ms', async () => {
   await expect(f('https://example.com')).rejects.toThrow()
 })
 
-it('throws if AbortSignal.timeout is missing', async () => {
+it('works with manual timeout implementation when AbortSignal.timeout is missing', async () => {
   const origTimeout = AbortSignal.timeout
   // @ts-expect-error: Simulate missing AbortSignal.timeout for coverage
   AbortSignal.timeout = undefined
-  const client = createClient()
+
   try {
-    await expect(client('http://x')).rejects.toThrow(
-      /AbortSignal\.timeout is required/
-    )
+    global.fetch = vi.fn().mockImplementation(async (input) => {
+      const signal = input instanceof Request ? input.signal : undefined
+      return await new Promise((_resolve, reject) => {
+        if (signal && signal.aborted) {
+          reject(new DOMException('aborted', 'AbortError'))
+        } else if (signal) {
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        }
+        // Never resolve (simulate hanging request)
+      })
+    })
+
+    const client = createClient({ timeout: 50 })
+    await expect(client('http://example.com')).rejects.toThrow()
   } finally {
     AbortSignal.timeout = origTimeout
   }
@@ -185,5 +198,18 @@ describe('Retry-After header', () => {
     } finally {
       Date.now = originalNow
     }
+  })
+
+  it('timeout: 0 disables timeout', async () => {
+    global.fetch = vi.fn().mockImplementation(async () => {
+      // Simulate a request that takes longer than normal timeout would allow
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      return new Response('success')
+    })
+
+    const client = createClient({ timeout: 0 })
+    const response = await client('https://example.com')
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('success')
   })
 })

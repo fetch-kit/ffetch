@@ -38,16 +38,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     input: RequestInfo | URL,
     init: FFetchRequestInit = {}
   ) => {
-    // Check for AbortSignal.timeout before any async logic
-    if (
-      typeof AbortSignal === 'undefined' ||
-      typeof AbortSignal.timeout !== 'function'
-    ) {
-      throw new Error(
-        'AbortSignal.timeout is required. Please use a polyfill for older environments.'
-      )
-    }
-
+    // No longer require AbortSignal.timeout - we'll implement it manually if needed
     let request = new Request(input, init)
 
     // Merge hooks: per-request hooks override client hooks, but fallback to client hooks
@@ -57,35 +48,68 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     }
     await effectiveHooks.before?.(request)
 
+    // Create timeout signal (manual implementation if AbortSignal.timeout not available)
+    function createTimeoutSignal(timeout: number): AbortSignal {
+      if (typeof AbortSignal?.timeout === 'function') {
+        return AbortSignal.timeout(timeout)
+      }
+
+      // Manual implementation for older environments
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+      // Clean up timeout if signal is aborted early by other means
+      controller.signal.addEventListener(
+        'abort',
+        () => clearTimeout(timeoutId),
+        { once: true }
+      )
+
+      return controller.signal
+    }
+
     // AbortSignal.timeout/any logic ---
     const effectiveTimeout = init.timeout ?? clientDefaultTimeout
     const userSignal = init.signal
+    const transformedSignal = request.signal // Extract signal from transformed request
     let timeoutSignal: AbortSignal | undefined = undefined
     let combinedSignal: AbortSignal | undefined = undefined
-    timeoutSignal = AbortSignal.timeout(effectiveTimeout)
-    if (userSignal) {
+
+    if (effectiveTimeout > 0) {
+      timeoutSignal = createTimeoutSignal(effectiveTimeout)
+    }
+
+    // Collect all signals that need to be combined
+    const signals: AbortSignal[] = []
+    if (userSignal) signals.push(userSignal)
+    if (transformedSignal) signals.push(transformedSignal)
+    if (timeoutSignal) signals.push(timeoutSignal)
+
+    if (signals.length === 0) {
+      combinedSignal = undefined
+    } else if (signals.length === 1) {
+      combinedSignal = signals[0]
+    } else {
+      // Multiple signals need to be combined
       if (typeof AbortSignal.any === 'function') {
-        combinedSignal = AbortSignal.any([userSignal, timeoutSignal])
+        combinedSignal = AbortSignal.any(signals)
       } else {
-        // Manual fallback: create a controller that aborts when either signal aborts
+        // Manual fallback: create a controller that aborts when any signal aborts
         const controller = new AbortController()
         combinedSignal = controller.signal
 
-        // If either signal is already aborted, abort immediately
-        if (userSignal.aborted || timeoutSignal.aborted) {
+        // If any signal is already aborted, abort immediately
+        if (signals.some((signal) => signal.aborted)) {
           controller.abort()
         } else {
-          // Listen for abort events on both signals
+          // Listen for abort events on all signals
           const abortHandler = () => controller.abort()
-          userSignal.addEventListener('abort', abortHandler, { once: true })
-          timeoutSignal.addEventListener('abort', abortHandler, { once: true })
+          signals.forEach((signal) => {
+            signal.addEventListener('abort', abortHandler, { once: true })
+          })
         }
       }
-    } else {
-      combinedSignal = timeoutSignal
-    }
-
-    // Restore hook-wrapped retry, enforce global timeout externally
+    } // Restore hook-wrapped retry, enforce global timeout externally
     const retryWithHooks = async () => {
       const effectiveRetries = init.retries ?? clientDefaultRetries
       const effectiveRetryDelay =

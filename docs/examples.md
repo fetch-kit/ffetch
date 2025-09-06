@@ -384,6 +384,51 @@ const files = Array.from(fileInput.files!)
 const results = await uploader.uploadMultiple(files, '/api/upload')
 ```
 
+### No Timeout for Long Operations
+
+For very large uploads, streaming operations, or long-running requests where you don't want any timeout:
+
+```typescript
+import createClient from '@gkoos/ffetch'
+
+// Client with no timeout - useful for streaming or very large uploads
+const streamingClient = createClient({
+  timeout: 0, // Disables timeout entirely
+  retries: 0, // Usually don't retry streaming operations
+})
+
+// Example: Stream large file upload
+async function uploadLargeFile(file: File) {
+  const response = await streamingClient('/api/upload/stream', {
+    method: 'POST',
+    body: file,
+    headers: {
+      'Content-Type': file.type,
+      'Content-Length': file.size.toString(),
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Upload failed: ${response.status}`)
+  }
+
+  return response.json()
+}
+
+// Or override timeout per request
+const client = createClient({ timeout: 5000 }) // Default 5s timeout
+
+async function normalRequest() {
+  return client('/api/quick') // Uses 5s timeout
+}
+
+async function longRequest() {
+  return client('/api/long-process', {
+    timeout: 0, // No timeout for this specific request
+  })
+}
+```
+
 ### Real-time Data Polling
 
 ```typescript
