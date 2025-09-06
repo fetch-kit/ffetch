@@ -16,11 +16,11 @@ jobs:
       - name: Debug coverage files
         run: |
           echo "Coverage directory contents:"
-          ls -la coverage/ || dir coverage\
+          ls -la coverage/
           echo "LCOV file size:"
-          wc -c coverage/lcov.info || (Get-Item coverage\lcov.info).Length
+          wc -c coverage/lcov.info
           echo "LCOV file first 10 lines:"
-          head -10 coverage/lcov.info || Get-Content coverage\lcov.info | Select-Object -First 10
+          head -10 coverage/lcov.info
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
