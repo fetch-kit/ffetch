@@ -1,5 +1,13 @@
 # ffetch
 
+## 3.0.0
+
+### Major Changes
+
+- a8bb7d4: Added
+  - controller created and exposed in pendingRequests
+  - abortAll() helper to abort all pending requests
+
 ## 2.0.0
 
 ### Major Changes
