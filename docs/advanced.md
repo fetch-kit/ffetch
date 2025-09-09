@@ -36,6 +36,13 @@ await client('https://api.example.com/v1/metrics', {
 
 ## Pending Requests Monitoring
 
+> **Technical Note:**
+> Every `PendingRequest` always has a `controller` property, even if you did not supply an AbortController. This allows you to abort any pending request programmatically, regardless of how it was created.
+
+> When multiple signals (user, timeout, transformRequest) are combined and `AbortSignal.any` is not available, ffetch creates a new internal `AbortController` to manage aborts. This controller is always available in `PendingRequest.controller`.
+
+> You can always abort a pending request using `pendingRequest.controller.abort()`, even if you did not provide a controller or signal. This works for all requests tracked in `pendingRequests`.
+
 You can access and monitor all active requests through the `pendingRequests` property on the client instance:
 
 ```typescript
@@ -52,20 +59,23 @@ client.pendingRequests.forEach((pending) => {
   console.log({
     url: pending.request.url,
     method: pending.request.method,
-    isAborted: pending.signal.aborted,
+    isAborted: pending.controller.signal.aborted,
   })
 })
 ```
 
 ### Use Cases for Pending Requests
 
+#### Signal Combination Logic
+
+ffetch automatically combines user, timeout, and transformRequest signals. If your environment does not support `AbortSignal.any`, ffetch uses an internal controller to ensure aborts are handled consistently.
+
 #### 1. Abort All Pending Requests
 
 ```typescript
 // Example: Abort all pending requests on page unload
 window.addEventListener('beforeunload', () => {
-  // Note: To abort, you need to use the original AbortController
-  // pending.signal is read-only, but you can check its state
+  client.abortAll() // Instantly aborts all active requests
 })
 ```
 
@@ -88,7 +98,7 @@ setInterval(() => {
     client.pendingRequests.map((p) => ({
       url: p.request.url,
       method: p.request.method,
-      aborted: p.signal.aborted,
+      aborted: p.controller.signal.aborted,
     }))
   )
 }, 1000)
@@ -99,9 +109,10 @@ setInterval(() => {
 - Each pending request object contains:
   - `promise` - The Promise<Response> for the request
   - `request` - The Request object with URL, headers, method, etc.
-  - `signal` - The AbortSignal being used (read-only)
-- Requests are automatically added when they start and removed when they complete (success or failure)
-- Each client instance maintains its own separate `pendingRequests` array
+  - `controller` - The AbortController for the request (use `.abort()` to cancel)
+  - Requests are automatically added when they start and removed when they complete (success or failure)
+  - Each client instance maintains its own separate `pendingRequests` array
+  - You can abort all requests at once using `client.abortAll()`
 
 ## Retry Strategies and Backoff
 

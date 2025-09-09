@@ -330,7 +330,10 @@ client('/api/other')
 console.log('Pending requests:', client.pendingRequests.length) // 2
 
 // Access individual pending requests
-client.pendingRequests[0].signal.abort() // Abort first request
+client.pendingRequests[0].controller.abort() // Abort first request
+
+// Abort all pending requests (new in v3)
+client.abortAll() // Instantly aborts all active requests
 ```
 
 ## TypeScript Migration
@@ -359,6 +362,10 @@ const options: FFetchRequestInit = {
   timeout: 5000, // ffetch extension
   retries: 3, // ffetch extension
 }
+
+// PendingRequest type changed in v3:
+// Old: { promise, request, signal }
+// New: { promise, request, controller }
 ```
 
 ## Performance Considerations

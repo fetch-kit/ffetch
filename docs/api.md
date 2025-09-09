@@ -54,8 +54,14 @@ Where `PendingRequest` is:
 interface PendingRequest {
   promise: Promise<Response>
   request: Request
-  signal: AbortSignal
+  controller: AbortController
 }
+```
+
+The client also exposes an `abortAll()` helper:
+
+```typescript
+client.abortAll(): void // Aborts all currently pending requests
 ```
 
 ### Default Values

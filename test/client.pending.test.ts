@@ -35,13 +35,11 @@ describe('Pending Requests', () => {
 
     // Should immediately appear in pending requests
     expect(client.pendingRequests).toHaveLength(1)
-    expect(client.pendingRequests[0]).toMatchObject({
-      request: expect.objectContaining({
-        url: 'https://example.com/api',
-      }),
-      signal: expect.any(AbortSignal),
-      promise: expect.any(Promise),
-    })
+    expect(client.pendingRequests[0].request.url).toBe(
+      'https://example.com/api'
+    )
+    expect(client.pendingRequests[0].controller).toBeInstanceOf(AbortController)
+    expect(client.pendingRequests[0].promise).toBeInstanceOf(Promise)
 
     // Resolve the fetch
     fetchResolve!(new Response('success'))
@@ -151,9 +149,9 @@ describe('Pending Requests', () => {
     // Should be tracked
     expect(client.pendingRequests).toHaveLength(1)
 
-    // The pending request should have the combined signal
+    // The pending request should have a controller
     const pendingRequest = client.pendingRequests[0]
-    expect(pendingRequest.signal.aborted).toBe(false)
+    expect(pendingRequest.controller).toBeInstanceOf(AbortController)
 
     // Abort using external controller
     controller.abort()
@@ -245,5 +243,44 @@ describe('Pending Requests', () => {
 
     // Should be removed after successful completion
     expect(client.pendingRequests).toHaveLength(0)
+  })
+})
+
+describe('pendingRequests and abortAll', () => {
+  it('exposes controller and abortAll aborts all requests', async () => {
+    global.fetch = vi.fn().mockImplementation(async (input) => {
+      const signal = input instanceof Request ? input.signal : undefined
+      return await new Promise((_resolve, reject) => {
+        if (signal) {
+          if (signal.aborted) {
+            reject(new DOMException('aborted', 'AbortError'))
+          } else {
+            signal.addEventListener('abort', () => {
+              reject(new DOMException('aborted', 'AbortError'))
+            })
+          }
+        }
+        // Never resolve (simulate hanging request)
+      })
+    })
+
+    const client = createClient({ timeout: 1000 })
+    const req1 = client('https://example.com/1')
+    const req2 = client('https://example.com/2')
+    // Wait for pendingRequests to be populated
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(client.pendingRequests.length).toBe(2)
+    // Each pendingRequest should have a controller
+    for (const entry of client.pendingRequests) {
+      expect(entry.controller).toBeInstanceOf(AbortController)
+      expect(entry.controller?.signal.aborted).toBe(false)
+    }
+    // Abort all
+    client.abortAll()
+    for (const entry of client.pendingRequests) {
+      expect(entry.controller?.signal.aborted).toBe(true)
+    }
+    await expect(req1).rejects.toBeDefined()
+    await expect(req2).rejects.toBeDefined()
   })
 })

@@ -19,6 +19,7 @@ export interface FFetchOptions {
 export type FFetch = {
   (input: RequestInfo | URL, init?: FFetchRequestInit): Promise<Response>
   pendingRequests: PendingRequest[]
+  abortAll: () => void
 }
 
 export interface FFetchRequestInit extends RequestInit, FFetchOptions {}
@@ -26,5 +27,5 @@ export interface FFetchRequestInit extends RequestInit, FFetchOptions {}
 export type PendingRequest = {
   promise: Promise<Response>
   request: Request
-  signal: AbortSignal
+  controller?: AbortController
 }

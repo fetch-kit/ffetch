@@ -34,6 +34,13 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
 
   const pendingRequests: PendingRequest[] = []
 
+  // Helper to abort all pending requests
+  function abortAll() {
+    for (const entry of pendingRequests) {
+      entry.controller?.abort()
+    }
+  }
+
   const client: FFetch = async (
     input: RequestInfo | URL,
     init: FFetchRequestInit = {}
@@ -74,6 +81,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     const transformedSignal = request.signal // Extract signal from transformed request
     let timeoutSignal: AbortSignal | undefined = undefined
     let combinedSignal: AbortSignal | undefined = undefined
+    let controller: AbortController | undefined = undefined
 
     if (effectiveTimeout > 0) {
       timeoutSignal = createTimeoutSignal(effectiveTimeout)
@@ -91,13 +99,16 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       combinedSignal = undefined
     } else if (signals.length === 1) {
       combinedSignal = signals[0]
+      // Always create a new AbortController for tracking
+      controller = new AbortController()
     } else {
       // Multiple signals need to be combined
       if (typeof AbortSignal.any === 'function') {
         combinedSignal = AbortSignal.any(signals)
+        controller = new AbortController()
       } else {
         // Manual fallback: create a controller that aborts when any signal aborts
-        const controller = new AbortController()
+        controller = new AbortController()
         combinedSignal = controller.signal
 
         // If any signal is already aborted, abort immediately
@@ -105,13 +116,15 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
           controller.abort()
         } else {
           // Listen for abort events on all signals
-          const abortHandler = () => controller.abort()
+          const abortHandler = () => {
+            if (controller) controller.abort()
+          }
           signals.forEach((signal) => {
             signal.addEventListener('abort', abortHandler, { once: true })
           })
         }
       }
-    } // Restore hook-wrapped retry, enforce global timeout externally
+    }
     const retryWithHooks = async () => {
       const effectiveRetries = init.retries ?? clientDefaultRetries
       const effectiveRetryDelay =
@@ -243,7 +256,11 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         })
       : retryWithHooks()
 
-    const entry: PendingRequest = { promise, request, signal: combinedSignal! }
+    const entry: PendingRequest = {
+      promise,
+      request,
+      controller,
+    }
     pendingRequests.push(entry)
 
     return promise.finally(() => {
@@ -256,6 +273,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
 
   // Add pendingRequests property to the client function
   client.pendingRequests = pendingRequests
+  client.abortAll = abortAll
 
   return client
 }
