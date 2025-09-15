@@ -14,6 +14,10 @@ export interface FFetchOptions {
   shouldRetry?: (ctx: RetryContext) => boolean
   circuit?: { threshold: number; reset: number }
   hooks?: Hooks
+  fetchHandler?: (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ) => Promise<Response>
 }
 
 export type FFetch = {

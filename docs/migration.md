@@ -43,7 +43,18 @@ const response = await client('https://api.example.com/data', {
 
 ## Key Compatibility Points
 
-### ✅ **Fully Compatible**
+### ✅ **Fully Compatible & Pluggable**
+
+ffetch can now be used as a drop-in wrapper for custom fetch implementations. This makes migration easier for SSR/metaframeworks (SvelteKit, Next.js, Nuxt, etc.) and for environments where you need to provide your own fetch (e.g., node-fetch, undici, framework-provided fetch).
+
+Simply pass your custom fetch implementation using the `fetchHandler` option:
+
+```typescript
+import createClient from '@gkoos/ffetch'
+import fetch from 'node-fetch'
+
+const client = createClient({ fetchHandler: fetch })
+```
 
 These work exactly the same as native fetch:
 

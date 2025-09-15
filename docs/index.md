@@ -90,6 +90,7 @@
 - **Circuit Breaker**: Automatic failure protection and recovery
 - **Hooks**: Lifecycle events for logging, auth, and transformation
 - **Pending Requests**: Real-time monitoring of active requests
+- **Custom fetch wrapping**: Pluggable fetch implementation for SSR, node-fetch, undici, and framework-provided fetch
 
 ### **Error Handling**
 

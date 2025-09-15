@@ -2,7 +2,7 @@
 
 ## createClient(options?)
 
-Creates a new HTTP client instance with the specified configuration.
+Creates a new HTTP client instance with the specified configuration. You can use ffetch as a drop-in replacement for native fetch, or wrap any fetch-compatible implementation (e.g., node-fetch, undici, SvelteKit/Next.js/Nuxt-provided fetch) for SSR, edge, and custom environments.
 
 ```typescript
 import createClient from '@gkoos/ffetch'
@@ -16,14 +16,15 @@ const client = createClient({
 
 ### Configuration Options
 
-| Option        | Type                                                                                                                      | Default                             | Description                                                       |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------- |
-| `timeout`     | `number` (ms)                                                                                                             | `5000`                              | Whole-request timeout in milliseconds. Use `0` to disable timeout |
-| `retries`     | `number`                                                                                                                  | `0`                                 | Maximum retry attempts                                            |
-| `retryDelay`  | `number \| (ctx: { attempt, request, response, error }) => number`                                                        | Exponential backoff + jitter        | Delay between retries                                             |
-| `shouldRetry` | `(ctx: { attempt, request, response, error }) => boolean`                                                                 | Retries on network errors, 5xx, 429 | Custom retry logic                                                |
-| `circuit`     | `{ threshold: number, reset: number }`                                                                                    | `undefined`                         | Circuit-breaker configuration                                     |
-| `hooks`       | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete, transformRequest, transformResponse }` | `{}`                                | Lifecycle hooks and transformers                                  |
+| Option         | Type                                                                                                                      | Default                                        | Description                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `timeout`      | `number` (ms)                                                                                                             | `5000`                                         | Whole-request timeout in milliseconds. Use `0` to disable timeout |
+| `retries`      | `number`                                                                                                                  | `0`                                            | Maximum retry attempts                                            |
+| `retryDelay`   | `number \| (ctx: { attempt, request, response, error }) => number`                                                        | Exponential backoff + jitter                   | Delay between retries                                             |
+| `shouldRetry`  | `(ctx: { attempt, request, response, error }) => boolean`                                                                 | Retries on network errors, 5xx, 429            | Custom retry logic                                                |
+| `circuit`      | `{ threshold: number, reset: number }`                                                                                    | `undefined`                                    | Circuit-breaker configuration                                     |
+| `hooks`        | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete, transformRequest, transformResponse }` | `{}`                                           | Lifecycle hooks and transformers                                  |
+| `fetchHandler` | `(input: RequestInfo                                                                                                      | URL, init?: RequestInit) => Promise<Response>` | `global fetch`                                                    | Custom fetch-compatible implementation to wrap (e.g., SvelteKit, Next.js, Nuxt, node-fetch, undici, or any polyfill). Defaults to global fetch. |
 
 ### Return Type
 
@@ -38,6 +39,10 @@ type FFetch = (
     shouldRetry?: (ctx: RetryContext) => boolean
     circuit?: { threshold: number; reset: number }
     hooks?: HooksConfig
+    fetchHandler?: (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => Promise<Response>
   }
 ) => Promise<Response>
 ```
@@ -115,4 +120,27 @@ interface HooksConfig {
     req: Request
   ) => Promise<Response> | Response
 }
+```
+
+### Usage Examples
+
+```typescript
+import createClient from '@gkoos/ffetch'
+
+// Basic usage
+const client = createClient({
+  timeout: 5000,
+  retries: 3,
+})
+
+// Pass a custom fetch-compatible implementation (SSR, metaframeworks, polyfills, node-fetch, undici, etc.)
+const client = createClient({
+  timeout: 5000,
+  retries: 3,
+  fetchHandler: fetch, // SvelteKit/Next.js/Nuxt provide their own fetch
+})
+
+// Or use node-fetch/undici in Node.js
+import nodeFetch from 'node-fetch'
+const clientNode = createClient({ fetchHandler: nodeFetch })
 ```

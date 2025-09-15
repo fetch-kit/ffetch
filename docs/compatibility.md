@@ -141,13 +141,18 @@ await client('https://api.external.com/data', {
 
 ## Environment Detection
 
-`ffetch` automatically adapts to the environment:
+`ffetch` automatically adapts to the environment and can wrap any fetch-compatible implementation:
 
 ```javascript
 // Automatically detects environment and uses appropriate fetch implementation
-const client = createClient()
+// Or pass your own fetch-compatible implementation for SSR, edge, or custom environments
+const client = createClient() // Uses global fetch by default
 
-// Works in Node.js, browsers, workers, etc.
+// Example: Use node-fetch, undici, or framework-provided fetch
+import fetch from 'node-fetch'
+const clientNode = createClient({ fetchHandler: fetch })
+
+// Works in Node.js, browsers, workers, SSR, edge, etc.
 const response = await client('https://api.example.com')
 ```
 
@@ -347,6 +352,47 @@ onUnmounted(() => {
 
 <div>{data ? JSON.stringify(data) : 'Loading...'}</div>
 ```
+
+### SSR Frameworks: SvelteKit, Next.js, Nuxt
+
+For SvelteKit, Next.js, and Nuxt, you must pass the exact fetch instance provided by the framework in your handler or context. This is not the global fetch, and the parameter name may vary (often `fetch`, but check your framework docs).
+
+**SvelteKit example:**
+
+```typescript
+// In load functions, actions, or endpoints, use the provided fetch
+export async function load({ fetch }) {
+  const client = createClient({ fetchHandler: fetch })
+  // Use client for SSR-safe requests
+}
+
+// In endpoints
+export async function GET({ fetch }) {
+  const client = createClient({ fetchHandler: fetch })
+  // ...
+}
+```
+
+**Nuxt example:**
+
+```typescript
+// In server routes, use event.fetch
+export default defineEventHandler((event) => {
+  const client = createClient({ fetchHandler: event.fetch })
+  // ...
+})
+```
+
+**Next.js edge API route (if fetch is provided):**
+
+```typescript
+export default async function handler(request) {
+  const client = createClient({ fetchHandler: request.fetch })
+  // ...
+}
+```
+
+> Always use the fetch instance provided by the framework in your handler/context, not the global fetch. The parameter name may vary, but it is always context-specific.
 
 ## Troubleshooting
 

@@ -23,6 +23,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     shouldRetry: clientDefaultShouldRetry = defaultShouldRetry,
     hooks: clientDefaultHooks = {},
     circuit: clientDefaultCircuit,
+    fetchHandler,
   } = opts
 
   const breaker = clientDefaultCircuit
@@ -220,7 +221,8 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
               signal: combinedSignal,
             })
             try {
-              return await fetch(reqWithSignal)
+              const handler = fetchHandler ?? fetch
+              return await handler(reqWithSignal)
             } catch (err) {
               throw mapToCustomError(err)
             }

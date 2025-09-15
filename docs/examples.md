@@ -91,6 +91,36 @@ const users = await api.get<User[]>('/users')
 const newUser = await api.post<User>('/users', { name: 'John' })
 ```
 
+## Custom Fetch Usage
+
+### Using ffetch with a Custom Fetch (e.g., node-fetch)
+
+```typescript
+import createClient from '@gkoos/ffetch'
+import fetch from 'node-fetch'
+
+const client = createClient({ fetchHandler: fetch })
+const response = await client('https://api.example.com/data')
+const data = await response.json()
+```
+
+### Injecting a Mock Fetch for Unit Tests
+
+```typescript
+import createClient from '@gkoos/ffetch'
+
+function mockFetch(url, options) {
+  return Promise.resolve(
+    new Response(JSON.stringify({ ok: true, url }), { status: 200 })
+  )
+}
+
+const client = createClient({ fetchHandler: mockFetch })
+const response = await client('https://api.example.com/test')
+const data = await response.json()
+// data: { ok: true, url: 'https://api.example.com/test' }
+```
+
 ## Advanced Patterns
 
 ### Microservices Client

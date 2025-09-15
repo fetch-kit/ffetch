@@ -11,7 +11,9 @@
 
 # @gkoos/ffetch
 
-**A production-ready TypeScript-first drop-in replacement for native fetch.**
+**A production-ready TypeScript-first drop-in replacement for native fetch, or any fetch-compatible implementation.**
+
+ffetch can wrap any fetch-compatible implementation (native fetch, node-fetch, undici, or framework-provided fetch), making it flexible for SSR, edge, and custom environments.
 
 **Key Features:**
 
@@ -49,6 +51,26 @@ const response = await api('https://api.example.com/users')
 const data = await response.json()
 ```
 
+### Using a Custom fetchHandler (SSR, metaframeworks, or polyfills)
+
+```typescript
+// Example: SvelteKit, Next.js, Nuxt, or node-fetch
+import createClient from '@gkoos/ffetch'
+
+// Pass your framework's fetch implementation
+const api = createClient({
+  fetchHandler: fetch, // SvelteKit/Next.js/Nuxt provide their own fetch
+  timeout: 5000,
+})
+
+// Or use node-fetch/undici in Node.js
+import nodeFetch from 'node-fetch'
+const apiNode = createClient({ fetchHandler: nodeFetch })
+
+// All ffetch features work identically
+const response = await api('/api/data')
+```
+
 ### Advanced Example
 
 ```typescript
@@ -57,6 +79,7 @@ const client = createClient({
   timeout: 10000,
   retries: 2,
   circuit: { threshold: 5, reset: 30000 },
+  fetchHandler: fetch, // Use custom fetch if needed
   hooks: {
     before: async (req) => console.log('→', req.url),
     after: async (req, res) => console.log('←', res.status),
@@ -104,6 +127,9 @@ try {
 
 For older environments, see the [compatibility guide](./docs/compatibility.md).
 
+**Custom fetch support:**
+You can pass any fetch-compatible implementation (native fetch, node-fetch, undici, SvelteKit, Next.js, Nuxt, or a polyfill) via the `fetchHandler` option. This makes ffetch fully compatible with SSR, edge, metaframework environments, custom backends, and test runners.
+
 ## CDN Usage
 
 ```html
@@ -117,17 +143,18 @@ For older environments, see the [compatibility guide](./docs/compatibility.md).
 
 ## Fetch vs. Axios vs. `ffetch`
 
-| Feature            | Native Fetch              | Axios                | ffetch                           |
-| ------------------ | ------------------------- | -------------------- | -------------------------------- |
-| Timeouts           | ❌ Manual AbortController | ✅ Built-in          | ✅ Built-in with fallbacks       |
-| Retries            | ❌ Manual implementation  | ❌ Manual or plugins | ✅ Smart exponential backoff     |
-| Circuit Breaker    | ❌ Not available          | ❌ Manual or plugins | ✅ Automatic failure protection  |
-| Request Monitoring | ❌ Manual tracking        | ❌ Manual tracking   | ✅ Built-in pending requests     |
-| Error Types        | ❌ Generic errors         | ⚠️ HTTP errors only  | ✅ Specific error classes        |
-| TypeScript         | ⚠️ Basic types            | ⚠️ Basic types       | ✅ Full type safety              |
-| Hooks/Middleware   | ❌ Not available          | ✅ Interceptors      | ✅ Comprehensive lifecycle hooks |
-| Bundle Size        | ✅ Native (0kb)           | ❌ ~13kb minified    | ✅ ~3kb minified                 |
-| Modern APIs        | ✅ Web standards          | ❌ XMLHttpRequest    | ✅ Fetch + modern features       |
+| Feature              | Native Fetch              | Axios                | ffetch                                                                                 |
+| -------------------- | ------------------------- | -------------------- | -------------------------------------------------------------------------------------- |
+| Timeouts             | ❌ Manual AbortController | ✅ Built-in          | ✅ Built-in with fallbacks                                                             |
+| Retries              | ❌ Manual implementation  | ❌ Manual or plugins | ✅ Smart exponential backoff                                                           |
+| Circuit Breaker      | ❌ Not available          | ❌ Manual or plugins | ✅ Automatic failure protection                                                        |
+| Request Monitoring   | ❌ Manual tracking        | ❌ Manual tracking   | ✅ Built-in pending requests                                                           |
+| Error Types          | ❌ Generic errors         | ⚠️ HTTP errors only  | ✅ Specific error classes                                                              |
+| TypeScript           | ⚠️ Basic types            | ⚠️ Basic types       | ✅ Full type safety                                                                    |
+| Hooks/Middleware     | ❌ Not available          | ✅ Interceptors      | ✅ Comprehensive lifecycle hooks                                                       |
+| Bundle Size          | ✅ Native (0kb)           | ❌ ~13kb minified    | ✅ ~3kb minified                                                                       |
+| Modern APIs          | ✅ Web standards          | ❌ XMLHttpRequest    | ✅ Fetch + modern features                                                             |
+| Custom Fetch Support | ❌ No (global only)       | ❌ No                | ✅ Yes (wrap any fetch-compatible implementation, including framework or custom fetch) |
 
 ## Contributing
 

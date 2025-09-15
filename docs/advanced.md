@@ -34,14 +34,19 @@ await client('https://api.example.com/v1/metrics', {
 })
 ```
 
+## Custom Fetch Compatibility
+
+ffetch can wrap any fetch-compatible implementation using the `fetchHandler` option. This includes native fetch, node-fetch, undici, or framework-provided fetch (SvelteKit, Next.js, Nuxt, etc.), as well as polyfills and test runners. All advanced features (timeouts, retries, circuit breaker, hooks, pending requests) work identically regardless of the underlying fetch implementation, making ffetch highly flexible for SSR, edge, and custom environments.
+
 ## Pending Requests Monitoring
 
-> **Technical Note:**
-> Every `PendingRequest` always has a `controller` property, even if you did not supply an AbortController. This allows you to abort any pending request programmatically, regardless of how it was created.
+Pending requests and abort logic work identically whether you use the default global fetch or a custom fetch implementation via `fetchHandler`. All requests are tracked, and you can abort them programmatically using the controller in each `PendingRequest`.
 
-> When multiple signals (user, timeout, transformRequest) are combined and `AbortSignal.any` is not available, ffetch creates a new internal `AbortController` to manage aborts. This controller is always available in `PendingRequest.controller`.
+Every `PendingRequest` always has a `controller` property, even if you did not supply an AbortController. This allows you to abort any pending request programmatically, regardless of how it was created.
 
-> You can always abort a pending request using `pendingRequest.controller.abort()`, even if you did not provide a controller or signal. This works for all requests tracked in `pendingRequests`.
+When multiple signals (user, timeout, transformRequest) are combined and `AbortSignal.any` is not available, ffetch creates a new internal `AbortController` to manage aborts. This controller is always available in `PendingRequest.controller`.
+
+You can always abort a pending request using `pendingRequest.controller.abort()`, even if you did not provide a controller or signal. This works for all requests tracked in `pendingRequests`.
 
 You can access and monitor all active requests through the `pendingRequests` property on the client instance:
 
