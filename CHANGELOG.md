@@ -1,5 +1,19 @@
 # ffetch
 
+## 3.2.0
+
+### Minor Changes
+
+- 504825e: Added
+  - onCircuitClose hook added
+
+  Changed
+  - Unreachable code removed
+  - Tests added to improve doe coverage
+
+  Docs
+  - Broken table in api.md fixed
+
 ## 3.1.0
 
 ### Minor Changes
