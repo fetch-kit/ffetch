@@ -32,6 +32,15 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         clientDefaultCircuit.reset
       )
     : null
+  if (
+    breaker &&
+    (clientDefaultHooks.onCircuitClose || clientDefaultHooks.onCircuitOpen)
+  ) {
+    breaker.setHooks({
+      onCircuitClose: clientDefaultHooks.onCircuitClose,
+      onCircuitOpen: clientDefaultHooks.onCircuitOpen,
+    })
+  }
 
   const pendingRequests: PendingRequest[] = []
 
@@ -207,8 +216,11 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
             })
             try {
               const handler = fetchHandler ?? fetch
-              return await handler(reqWithSignal)
+              const response = await handler(reqWithSignal)
+              if (breaker) breaker.setLastSuccessRequest(request)
+              return response
             } catch (err) {
+              if (breaker) breaker.setLastOpenRequest(request)
               throw mapToCustomError(err)
             }
           },

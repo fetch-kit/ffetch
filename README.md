@@ -84,6 +84,8 @@ const client = createClient({
     before: async (req) => console.log('→', req.url),
     after: async (req, res) => console.log('←', res.status),
     onError: async (req, err) => console.error('Error:', err.message),
+    onCircuitOpen: (req) => console.warn('Circuit opened due to:', req.url),
+    onCircuitClose: (req) => console.info('Circuit closed after:', req.url),
   },
 })
 

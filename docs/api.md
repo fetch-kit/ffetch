@@ -145,3 +145,39 @@ const client = createClient({
 import nodeFetch from 'node-fetch'
 const clientNode = createClient({ fetchHandler: nodeFetch })
 ```
+
+## Circuit Breaker Hooks
+
+### onCircuitOpen
+
+Called when the circuit transitions to open after consecutive failures. Receives the request that triggered the open event.
+
+Signature: `(req: Request) => void | Promise<void>`
+
+### onCircuitClose
+
+Called when the circuit transitions to closed after a successful request. Receives the request that closed the circuit.
+
+Signature: `(req: Request) => void | Promise<void>`
+
+### Example
+
+```js
+const client = createClient({
+  circuit: { threshold: 2, reset: 1000 },
+  hooks: {
+    onCircuitOpen: (req) => console.warn('Circuit opened due to:', req.url),
+    onCircuitClose: (req) => console.info('Circuit closed after:', req.url),
+  },
+})
+```
+
+### Circuit Breaker Behavior
+
+- Circuit opens after `threshold` consecutive failures. The request that triggers the open is passed to `onCircuitOpen`.
+- Circuit closes after a successful request (after reset period). The successful request is passed to `onCircuitClose`.
+
+### Error Handling
+
+- Hooks are only called on state transitions, not every request.
+- Request errors and circuit state changes are handled separately.

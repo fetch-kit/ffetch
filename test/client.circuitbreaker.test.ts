@@ -1,3 +1,44 @@
+it('calls onCircuitOpen and onCircuitClose hooks appropriately', async () => {
+  let openCalled = false
+  let closeCalled = false
+  let closeRequest: Request | undefined
+
+  // Simulate fetch: fail twice, then succeed
+  let callCount = 0
+  global.fetch = vi.fn().mockImplementation(async () => {
+    callCount++
+    if (callCount < 3) throw new Error('fail')
+    return new Response('ok')
+  })
+
+  const client = createClient({
+    retries: 0,
+    circuit: { threshold: 2, reset: 100 },
+    hooks: {
+      onCircuitOpen: () => {
+        openCalled = true
+      },
+      onCircuitClose: (req) => {
+        closeCalled = true
+        closeRequest = req
+      },
+    },
+  })
+
+  // First two requests fail, opening the circuit
+  await expect(client('https://example.com')).rejects.toThrow('fail')
+  await expect(client('https://example.com')).rejects.toThrow('fail')
+  expect(openCalled).toBe(true)
+  expect(closeCalled).toBe(false)
+
+  // Wait for reset period
+  await new Promise((resolve) => setTimeout(resolve, 120))
+
+  // Third request succeeds, closing the circuit
+  await expect(client('https://example.com')).resolves.toBeInstanceOf(Response)
+  expect(closeCalled).toBe(true)
+  expect(closeRequest).toBeInstanceOf(Request)
+})
 import { describe, it, expect, vi } from 'vitest'
 
 import { createClient } from '../src/client.js'
