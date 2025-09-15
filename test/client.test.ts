@@ -6,22 +6,22 @@ import { defaultDelay } from '../src/retry.js'
 // Suppress unhandled promise rejections globally for this test file
 
 it('aborts after 50 ms', async () => {
-  global.fetch = vi.fn().mockImplementation(async (input) => {
-    const signal = input instanceof Request ? input.signal : undefined
-    return await new Promise((_resolve, reject) => {
-      if (signal && signal.aborted) {
-        reject(new DOMException('aborted', 'AbortError'))
-      } else if (signal) {
-        signal.addEventListener('abort', () => {
-          reject(new DOMException('aborted', 'AbortError'))
-        })
-      }
-      // Otherwise, never resolve (simulate hanging request)
-    })
+  const controller = new AbortController()
+  controller.abort() // Abort before request
+  global.fetch = vi.fn().mockImplementation(async (_input) => {
+    // fetch should never be called if signal is already aborted
+    throw new Error('fetch should not be called')
   })
 
-  const f = createClient({ timeout: 50 })
-  await expect(f('https://example.com')).rejects.toThrow()
+  const f = createClient()
+  try {
+    await f('https://example.com', { signal: controller.signal })
+    throw new Error('Expected AbortError to be thrown')
+  } catch (err) {
+    expect(err).toBeInstanceOf(Error)
+    expect(err.name).toBe('AbortError')
+    expect(err.message).toBe('Request was aborted by user')
+  }
 })
 
 it('works with manual timeout implementation when AbortSignal.timeout is missing', async () => {
@@ -48,6 +48,49 @@ it('works with manual timeout implementation when AbortSignal.timeout is missing
     await expect(client('http://example.com')).rejects.toThrow()
   } finally {
     AbortSignal.timeout = origTimeout
+  }
+})
+
+it('throws AbortError with message "Request was aborted" when timeout signal aborts', async () => {
+  const transformedController = new AbortController()
+  global.fetch = vi.fn().mockImplementation(async (input) => {
+    const signal = input instanceof Request ? input.signal : undefined
+    return await new Promise((_resolve, reject) => {
+      if (signal && signal.aborted) {
+        reject(new DOMException('aborted', 'AbortError'))
+      } else if (signal) {
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('aborted', 'AbortError'))
+        })
+      }
+      // Never resolve (simulate hanging request)
+    })
+  })
+  transformedController.abort() // Abort before request starts
+  // Simulate environment without throwIfAborted
+  const origThrowIfAborted = AbortSignal.prototype.throwIfAborted
+  // @ts-expect-error: Simulate environment without throwIfAborted for coverage
+  AbortSignal.prototype.throwIfAborted = undefined
+  global.fetch = vi.fn().mockImplementation(async (input) => {
+    throw new Error('fetch should not be called if signal is already aborted')
+  })
+  const client = createClient({
+    hooks: {
+      transformRequest: (req) =>
+        new Request(req, { signal: transformedController.signal }),
+    },
+    // No timeout, no user signal
+  })
+  try {
+    await client('https://example.com')
+    throw new Error('Expected AbortError to be thrown')
+  } catch (err) {
+    expect(err.constructor.name).toBe('AbortError')
+    expect(err.name).toBe('AbortError')
+    expect(err.message).toBe('Request was aborted')
+  } finally {
+    // Restore throwIfAborted
+    AbortSignal.prototype.throwIfAborted = origThrowIfAborted
   }
 })
 
@@ -212,4 +255,25 @@ describe('Retry-After header', () => {
     expect(response.status).toBe(200)
     expect(await response.text()).toBe('success')
   })
+})
+
+it('should throw if AbortSignal.any is missing and multiple signals are present', async () => {
+  const origAny = AbortSignal.any
+  // Remove AbortSignal.any
+  // @ts-expect-error: Simulate missing AbortSignal.any for coverage
+  AbortSignal.any = undefined
+  const controller1 = new AbortController()
+  const controller2 = new AbortController()
+  // Use transformRequest to add a second signal
+  const client = createClient({
+    hooks: {
+      transformRequest: (req) =>
+        new Request(req, { signal: controller2.signal }),
+    },
+  })
+  await expect(
+    client('https://example.com', { signal: controller1.signal, timeout: 1 })
+  ).rejects.toThrow(/AbortSignal.any is required/)
+  // Restore AbortSignal.any
+  AbortSignal.any = origAny
 })

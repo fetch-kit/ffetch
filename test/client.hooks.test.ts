@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createClient } from '../src/client.js'
+import { CircuitOpenError } from '../src/error.js'
 
 describe('Hooks', () => {
   it('calls before, after, and onComplete hooks on success', async () => {
@@ -267,5 +268,32 @@ describe('Hooks', () => {
 
     // The abort listener should only be called once, not twice due to signal duplication
     expect(abortListenerCount).toBe(1)
+  })
+
+  it('should call onError and onComplete hooks when circuit is open', async () => {
+    let onErrorCalled = false
+    let onCompleteCalled = false
+    const client = createClient({
+      circuit: { threshold: 1, reset: 10000 },
+      fetchHandler: () => {
+        throw new Error('fail')
+      },
+      hooks: {
+        onError: (req, err) => {
+          if (err instanceof CircuitOpenError) onErrorCalled = true
+        },
+        onComplete: (req, res, err) => {
+          if (err instanceof CircuitOpenError) onCompleteCalled = true
+        },
+      },
+    })
+    // First request fails, circuit opens
+    await expect(client('https://example.com')).rejects.toThrow()
+    // Second request should trigger CircuitOpenError and hooks
+    await expect(client('https://example.com')).rejects.toThrow(
+      CircuitOpenError
+    )
+    expect(onErrorCalled).toBe(true)
+    expect(onCompleteCalled).toBe(true)
   })
 })

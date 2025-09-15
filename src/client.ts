@@ -98,10 +98,8 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
 
     // Use AbortSignal.any for signal combination. Requires native support or a polyfill.
     // If not available, instruct users to install a polyfill for environments lacking AbortSignal.any.
-    if (signals.length === 0) {
-      combinedSignal = undefined
-      controller = new AbortController()
-    } else if (signals.length === 1) {
+    // there are always 1 or more signals
+    if (signals.length === 1) {
       combinedSignal = signals[0]
       controller = new AbortController()
     } else {

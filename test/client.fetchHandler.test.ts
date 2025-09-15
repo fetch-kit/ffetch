@@ -65,8 +65,12 @@ describe('ffetch fetchHandler option', () => {
   })
 
   it('falls back to global fetch if fetchHandler is not provided', async () => {
+    const originalFetch = global.fetch
+    global.fetch = vi.fn(() => Promise.resolve(new Response('ok')))
     const client = createClient()
-    const res = await client('https://httpbin.org/get')
+    const res = await client('https://example.com')
     expect(res).toBeInstanceOf(Response)
+    expect(global.fetch).toHaveBeenCalled()
+    global.fetch = originalFetch
   })
 })
