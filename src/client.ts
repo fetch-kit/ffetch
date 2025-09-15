@@ -96,35 +96,22 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     }
     if (timeoutSignal) signals.push(timeoutSignal)
 
+    // Use AbortSignal.any for signal combination. Requires native support or a polyfill.
+    // If not available, instruct users to install a polyfill for environments lacking AbortSignal.any.
     if (signals.length === 0) {
       combinedSignal = undefined
+      controller = new AbortController()
     } else if (signals.length === 1) {
       combinedSignal = signals[0]
-      // Always create a new AbortController for tracking
       controller = new AbortController()
     } else {
-      // Multiple signals need to be combined
-      if (typeof AbortSignal.any === 'function') {
-        combinedSignal = AbortSignal.any(signals)
-        controller = new AbortController()
-      } else {
-        // Manual fallback: create a controller that aborts when any signal aborts
-        controller = new AbortController()
-        combinedSignal = controller.signal
-
-        // If any signal is already aborted, abort immediately
-        if (signals.some((signal) => signal.aborted)) {
-          controller.abort()
-        } else {
-          // Listen for abort events on all signals
-          const abortHandler = () => {
-            if (controller) controller.abort()
-          }
-          signals.forEach((signal) => {
-            signal.addEventListener('abort', abortHandler, { once: true })
-          })
-        }
+      if (typeof AbortSignal.any !== 'function') {
+        throw new Error(
+          'AbortSignal.any is required for combining multiple signals. Please install a polyfill for environments that do not support it.'
+        )
       }
+      combinedSignal = AbortSignal.any(signals)
+      controller = new AbortController()
     }
     const retryWithHooks = async () => {
       const effectiveRetries = init.retries ?? clientDefaultRetries

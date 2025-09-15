@@ -44,9 +44,7 @@ Pending requests and abort logic work identically whether you use the default gl
 
 Every `PendingRequest` always has a `controller` property, even if you did not supply an AbortController. This allows you to abort any pending request programmatically, regardless of how it was created.
 
-When multiple signals (user, timeout, transformRequest) are combined and `AbortSignal.any` is not available, ffetch creates a new internal `AbortController` to manage aborts. This controller is always available in `PendingRequest.controller`.
-
-You can always abort a pending request using `pendingRequest.controller.abort()`, even if you did not provide a controller or signal. This works for all requests tracked in `pendingRequests`.
+Signal combination (user, timeout, transformRequest) requires `AbortSignal.any`. If your environment does not support it, you must install a polyfill before using ffetch.
 
 You can access and monitor all active requests through the `pendingRequests` property on the client instance:
 

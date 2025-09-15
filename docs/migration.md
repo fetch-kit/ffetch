@@ -299,13 +299,15 @@ const client = createClient({
 const controller = new AbortController()
 const response = await fetch(url, { signal: controller.signal })
 
-// ffetch - combines multiple signals automatically
+// ffetch - combines multiple signals automatically using AbortSignal.any
+// Requires AbortSignal.any (native or polyfill)
 const controller = new AbortController()
 const response = await client(url, {
   signal: controller.signal, // User signal
   timeout: 5000, // Creates timeout signal
   // Both signals are automatically combined
 })
+// If AbortSignal.any is not available, you must install a polyfill before using ffetch
 ```
 
 ### 2. **Error Instance Checks**

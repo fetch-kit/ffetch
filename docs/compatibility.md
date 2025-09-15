@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-`ffetch` requires modern AbortSignal APIs, specifically `AbortSignal.timeout` and `AbortSignal.any`.
+`ffetch` requires modern AbortSignal APIs, specifically `AbortSignal.timeout` and **AbortSignal.any**. Signal combination requires `AbortSignal.any` (native or polyfill).
 
 ## Node.js Support
 
@@ -13,21 +13,19 @@
 
 ### Polyfills for Older Versions
 
-For older Node.js versions, you must install a polyfill:
+For older Node.js versions, you must install a polyfill for both `AbortSignal.timeout` and `AbortSignal.any`:
 
 ```bash
-npm install abortcontroller-polyfill
-# or
-npm install abort-controller-x
+npm install abortcontroller-polyfill abort-controller-x
 ```
 
 Then ensure the APIs are available globally before importing `ffetch`:
 
 ```javascript
-// Option 1: abortcontroller-polyfill
+// Option 1: abortcontroller-polyfill (for AbortSignal.timeout)
 require('abortcontroller-polyfill/dist/polyfill-patch-fetch')
 
-// Option 2: abort-controller-x
+// Option 2: abort-controller-x (for AbortSignal.any)
 import 'abort-controller-x/polyfill'
 
 // Now you can use ffetch
@@ -209,7 +207,9 @@ function checkCompatibility() {
   }
 
   if (typeof AbortSignal.any !== 'function') {
-    console.warn('AbortSignal.any not supported. Some features may not work.')
+    throw new Error(
+      'AbortSignal.any is required for combining multiple signals. Please install a polyfill.'
+    )
   }
 }
 

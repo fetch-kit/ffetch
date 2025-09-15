@@ -82,6 +82,7 @@ client.abortAll(): void // Aborts all currently pending requests
 
 ### Notes
 
+- Signal combination (user, timeout, transformRequest) requires `AbortSignal.any`. If your environment does not support it, you must install a polyfill before using ffetch.
 - The first retry attempt uses `attempt = 2` (i.e., the first call is attempt 1, first retry is 2)
 - `shouldRetry` default logic: retries on network errors, HTTP 5xx, or 429; does not retry on 4xx (except 429), abort, or timeout errors
 - All client options can be overridden on a per-request basis via the `init` parameter

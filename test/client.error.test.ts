@@ -240,22 +240,4 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
       expect(err.message).toBe('Retry limit reached')
     }
   })
-
-  it('throws AbortError if combinedSignal.aborted is true and throwIfAborted is missing', async () => {
-    // Remove AbortSignal.any to force fallback branch
-    const origAny = AbortSignal.any
-    // @ts-expect-error: Simulate missing AbortSignal.any for fallback branch coverage
-    AbortSignal.any = undefined
-
-    // Use a minimal fake signal for branch coverage; cast to AbortSignal for test only
-    const fakeSignal = { aborted: true } as unknown as AbortSignal
-
-    const f = createClient()
-    await expect(
-      f('https://example.com', { signal: fakeSignal })
-    ).rejects.toThrowError(new AbortError('Request was aborted by user'))
-
-    // Restore AbortSignal.any
-    AbortSignal.any = origAny
-  })
 })

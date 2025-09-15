@@ -122,13 +122,20 @@ try {
 
 `ffetch` requires modern AbortSignal APIs:
 
-- **Node.js 18.8+** (or polyfill for older versions)
-- **Modern browsers** (Chrome 88+, Firefox 89+, Safari 15.4+, Edge 88+)
+- **Node.js 20.6+** (for AbortSignal.any)
+- **Modern browsers** (Chrome 117+, Firefox 117+, Safari 17+, Edge 117+)
 
-For older environments, see the [compatibility guide](./docs/compatibility.md).
+If your environment does not support `AbortSignal.any` (Node.js < 20.6, older browsers), you **must install a polyfill** before using ffetch. See the [compatibility guide](./docs/compatibility.md) for instructions.
 
 **Custom fetch support:**
 You can pass any fetch-compatible implementation (native fetch, node-fetch, undici, SvelteKit, Next.js, Nuxt, or a polyfill) via the `fetchHandler` option. This makes ffetch fully compatible with SSR, edge, metaframework environments, custom backends, and test runners.
+
+#### "AbortSignal.any is not a function"
+
+```
+Solution: Install a polyfill for AbortSignal.any
+npm install abort-controller-x
+```
 
 ## CDN Usage
 
