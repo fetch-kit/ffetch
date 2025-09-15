@@ -71,7 +71,7 @@ it('throws AbortError with message "Request was aborted" when timeout signal abo
   const origThrowIfAborted = AbortSignal.prototype.throwIfAborted
   // @ts-expect-error: Simulate environment without throwIfAborted for coverage
   AbortSignal.prototype.throwIfAborted = undefined
-  global.fetch = vi.fn().mockImplementation(async (input) => {
+  global.fetch = vi.fn().mockImplementation(async (_input) => {
     throw new Error('fetch should not be called if signal is already aborted')
   })
   const client = createClient({
