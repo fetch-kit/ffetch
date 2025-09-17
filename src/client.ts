@@ -51,7 +51,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     }
   }
 
-  const client: FFetch = async (
+  const client = async (
     input: RequestInfo | URL,
     init: FFetchRequestInit = {}
   ) => {
@@ -271,8 +271,16 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
   }
 
   // Add pendingRequests property to the client function
-  client.pendingRequests = pendingRequests
-  client.abortAll = abortAll
+  ;(client as FFetch).pendingRequests = pendingRequests
+  ;(client as FFetch).abortAll = abortAll
 
-  return client
+  // Expose circuit breaker open state
+  Object.defineProperty(client, 'circuitOpen', {
+    get() {
+      return breaker ? breaker.open : false
+    },
+    enumerable: true,
+  })
+
+  return client as FFetch
 }

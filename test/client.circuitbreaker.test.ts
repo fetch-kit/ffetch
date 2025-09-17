@@ -44,6 +44,32 @@ import { describe, it, expect, vi } from 'vitest'
 import { createClient } from '../src/client.js'
 
 describe('CircuitBreaker', () => {
+  it('exposes open state via getter', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('fail'))
+    const client = createClient({
+      retries: 0,
+      circuit: { threshold: 2, reset: 100 },
+    })
+    // First two failures should open the circuit
+    await expect(client('https://test.com')).rejects.toThrow('fail')
+    await expect(client('https://test.com')).rejects.toThrow('fail')
+    // Circuit should now be open
+    expect(client.circuitOpen).toBe(true)
+    // Third call should be blocked by circuit breaker
+    await expect(client('https://test.com')).rejects.toThrow('Circuit is open')
+    // Wait for reset (increase to ensure it's past the reset period)
+    await new Promise((r) => setTimeout(r, 200))
+    // After reset, the next call should try again (and fail)
+    await expect(client('https://test.com')).rejects.toThrow('fail')
+    // Circuit is still open after another failure
+    expect(client.circuitOpen).toBe(true)
+    // Now simulate a successful request
+    global.fetch = vi.fn().mockResolvedValue(new Response('ok'))
+    await new Promise((r) => setTimeout(r, 120)) // Ensure reset period is fully elapsed
+    // Now the circuit should allow the request and close
+    await expect(client('https://test.com')).resolves.toBeInstanceOf(Response)
+    expect(client.circuitOpen).toBe(false)
+  })
   it('blocks requests after threshold and resets after timeout', async () => {
     global.fetch = vi.fn().mockImplementation(async () => {
       throw new Error('fail')

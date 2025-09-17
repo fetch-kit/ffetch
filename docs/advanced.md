@@ -131,9 +131,6 @@ const client = createClient({
     // response: Response | undefined
     // error: unknown
 
-    // Linear backoff
-    return 100 * attempt
-
     // Exponential backoff with cap
     return Math.min(2 ** attempt * 1000, 30000)
 
@@ -148,8 +145,6 @@ const client = createClient({
 ```
 
 ### Custom Retry Logic
-
-You can provide a function for `shouldRetry` that receives the same context object:
 
 ```typescript
 const client = createClient({
@@ -184,6 +179,26 @@ By default, if the server responds with a `Retry-After` header (either in second
 ## Circuit Breaker Pattern
 
 The circuit breaker pattern protects your service from repeated failures by temporarily blocking requests after a threshold of consecutive errors. This helps prevent cascading failures and allows your system to recover gracefully.
+
+### Monitoring Circuit State at Runtime
+
+You can inspect the circuit breaker state at runtime using the `client.circuitOpen` property:
+
+```typescript
+if (client.circuitOpen) {
+  console.warn('Circuit is open! Requests will fail fast.')
+  // Optionally log, alert, or trigger fallback logic
+}
+```
+
+This is useful for:
+
+- Monitoring service health
+- Logging or alerting when the circuit opens/closes
+- Implementing custom fallback or degraded mode logic
+- Integrating with dashboards or metrics
+
+> **Note:** If the client is not configured with a circuit breaker (`circuit` option omitted), `client.circuitOpen` will always be `false` and the property is inert.
 
 ### How it Works
 

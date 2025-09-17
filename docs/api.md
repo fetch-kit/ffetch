@@ -69,6 +69,22 @@ The client also exposes an `abortAll()` helper:
 client.abortAll(): void // Aborts all currently pending requests
 ```
 
+### Circuit Breaker State
+
+#### client.circuitOpen
+
+`circuitOpen: boolean` — True if the circuit breaker is open (blocking requests), false otherwise.
+
+> **Note:** If the client is not configured with a circuit breaker, `client.circuitOpen` will always be `false`.
+
+This property allows you to check if the client is currently blocking requests due to repeated failures. It is useful for monitoring, debugging, or custom logic:
+
+```typescript
+if (client.circuitOpen) {
+  console.warn('Circuit breaker is open, requests are blocked.')
+}
+```
+
 ### Default Values
 
 | Option        | Default Value / Logic                                                                            |

@@ -24,6 +24,10 @@ export type FFetch = {
   (input: RequestInfo | URL, init?: FFetchRequestInit): Promise<Response>
   pendingRequests: PendingRequest[]
   abortAll: () => void
+  /**
+   * True if the circuit breaker is open (blocking requests), false otherwise.
+   */
+  circuitOpen: boolean
 }
 
 export interface FFetchRequestInit extends RequestInit, FFetchOptions {}

@@ -4,6 +4,27 @@ Real-world examples and patterns for using `@gkoos/ffetch` in different scenario
 
 ## Basic Usage Patterns
 
+### Checking Circuit State Before Request
+
+You can inspect the circuit breaker state at runtime using `client.circuitOpen` to avoid making requests when the circuit is open:
+
+```typescript
+import createClient from '@gkoos/ffetch'
+
+const client = createClient({
+  circuit: { threshold: 5, reset: 30000 },
+})
+
+if (client.circuitOpen) {
+  console.warn('Service is unavailable (circuit open). Skipping request.')
+} else {
+  const response = await client('https://api.example.com/data')
+  const data = await response.json()
+}
+```
+
+// If the client is not configured with a circuit breaker, client.circuitOpen will always be false.
+
 ### Simple HTTP Client
 
 ```typescript

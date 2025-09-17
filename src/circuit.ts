@@ -4,6 +4,11 @@ export class CircuitBreaker {
   private failures = 0
   private nextAttempt = 0
   private isOpen = false
+
+  // Returns true if the circuit breaker is currently open (blocking requests).
+  get open(): boolean {
+    return this.isOpen
+  }
   private hooks?: {
     onCircuitOpen?: (req: Request) => void | Promise<void>
     onCircuitClose?: (req: Request) => void | Promise<void>
