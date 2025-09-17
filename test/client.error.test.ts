@@ -193,7 +193,7 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
       circuit: { threshold: 2, reset: 100 },
     })
     await expect(f('https://example.com')).rejects.toThrow('fail')
-    await expect(f('https://example.com')).rejects.toThrow('fail')
+    await expect(f('https://example.com')).rejects.toThrow(CircuitOpenError)
     await expect(f('https://example.com')).rejects.toThrow(CircuitOpenError)
     // Wait for reset
     await new Promise((r) => setTimeout(r, 120))

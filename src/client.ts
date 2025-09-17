@@ -32,6 +32,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         clientDefaultCircuit.reset
       )
     : null
+
   if (
     breaker &&
     (clientDefaultHooks.onCircuitClose || clientDefaultHooks.onCircuitOpen)
@@ -217,10 +218,15 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
             try {
               const handler = fetchHandler ?? fetch
               const response = await handler(reqWithSignal)
-              if (breaker) breaker.setLastSuccessRequest(request)
+              // Circuit breaker: record result
+              if (breaker) {
+                if (breaker.recordResult(response, undefined, request)) {
+                  throw new Error(`HTTP error: ${response.status}`)
+                }
+              }
               return response
             } catch (err) {
-              if (breaker) breaker.setLastOpenRequest(request)
+              if (breaker) breaker.recordResult(undefined, err, request)
               throw mapToCustomError(err)
             }
           },
@@ -270,9 +276,22 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     })
   }
 
-  // Add pendingRequests property to the client function
-  ;(client as FFetch).pendingRequests = pendingRequests
-  ;(client as FFetch).abortAll = abortAll
+  // Add pendingRequests property to the client function (read-only)
+  Object.defineProperty(client, 'pendingRequests', {
+    get() {
+      return pendingRequests
+    },
+    enumerable: false,
+    configurable: false,
+  })
+
+  // Add abortAll method to the client function (read-only)
+  Object.defineProperty(client, 'abortAll', {
+    value: abortAll,
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  })
 
   // Expose circuit breaker open state
   Object.defineProperty(client, 'circuitOpen', {

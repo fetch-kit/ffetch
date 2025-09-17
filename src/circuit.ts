@@ -1,4 +1,4 @@
-import { CircuitOpenError } from './error.js'
+import { CircuitOpenError, RetryLimitError } from './error.js'
 
 export class CircuitBreaker {
   private failures = 0
@@ -20,6 +20,27 @@ export class CircuitBreaker {
     private threshold: number,
     private resetTimeout: number
   ) {}
+
+  // Call this after each request to record the result and update circuit state.
+  // Returns true if the result was counted as a failure.
+  recordResult(response?: Response, error?: unknown, req?: Request): boolean {
+    // Count thrown errors (network, abort, timeout) as failures
+    if (error && !(error instanceof RetryLimitError)) {
+      this.setLastOpenRequest(req!)
+      this.onFailure()
+      return true
+    }
+    // Count HTTP 5xx and 429 responses as failures
+    if (response && (response.status >= 500 || response.status === 429)) {
+      this.setLastOpenRequest(req!)
+      this.onFailure()
+      return true
+    }
+    // Otherwise, count as success
+    if (req) this.setLastSuccessRequest(req)
+    this.onSuccess()
+    return false
+  }
 
   setHooks(hooks: {
     onCircuitOpen?: (req: Request) => void | Promise<void>
