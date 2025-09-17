@@ -165,7 +165,9 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
       await f('https://example.com')
     } catch (err) {
       expect(err).toBeInstanceOf(RetryLimitError)
-      expect(err.message).toBe('something bad')
+      if (err instanceof Error) {
+        expect(err.message).toBe('something bad')
+      }
     }
   })
 
@@ -237,7 +239,9 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
       await f('https://example.com')
     } catch (err) {
       expect(err).toBeInstanceOf(RetryLimitError)
-      expect(err.message).toBe('Retry limit reached')
+      if (err instanceof Error) {
+        expect(err.message).toBe('Retry limit reached')
+      }
     }
   })
 })

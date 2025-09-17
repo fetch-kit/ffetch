@@ -19,8 +19,10 @@ it('aborts after 50 ms', async () => {
     throw new Error('Expected AbortError to be thrown')
   } catch (err) {
     expect(err).toBeInstanceOf(Error)
-    expect(err.name).toBe('AbortError')
-    expect(err.message).toBe('Request was aborted by user')
+    if (err instanceof Error) {
+      expect(err.name).toBe('AbortError')
+      expect(err.message).toBe('Request was aborted by user')
+    }
   }
 })
 
@@ -85,9 +87,11 @@ it('throws AbortError with message "Request was aborted" when timeout signal abo
     await client('https://example.com')
     throw new Error('Expected AbortError to be thrown')
   } catch (err) {
-    expect(err.constructor.name).toBe('AbortError')
-    expect(err.name).toBe('AbortError')
-    expect(err.message).toBe('Request was aborted')
+    if (err instanceof Error) {
+      expect(err.constructor.name).toBe('AbortError')
+      expect(err.name).toBe('AbortError')
+      expect(err.message).toBe('Request was aborted')
+    }
   } finally {
     // Restore throwIfAborted
     AbortSignal.prototype.throwIfAborted = origThrowIfAborted
