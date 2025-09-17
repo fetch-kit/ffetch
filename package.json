@@ -1,6 +1,6 @@
 {
   "name": "@gkoos/ffetch",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "Fetch wrapper with configurable timeouts, retries, and TypeScript-first DX",
   "keywords": [
     "fetch",

@@ -1,5 +1,12 @@
 # ffetch
 
+## 3.3.0
+
+### Minor Changes
+
+- 4c79eb3: Added
+  - Circuit breaker state exposed
+
 ## 3.2.0
 
 ### Minor Changes
