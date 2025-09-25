@@ -1,5 +1,12 @@
 # ffetch
 
+## 3.4.1
+
+### Patch Changes
+
+- be108a3: Changed
+  - migrated to @fetchkit/ffetch
+
 ## 3.4.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
-  "name": "@gkoos/ffetch",
-  "version": "3.4.0",
+  "name": "@fetchkit/ffetch",
+  "version": "3.4.1",
   "description": "Fetch wrapper with configurable timeouts, retries, and TypeScript-first DX",
   "keywords": [
     "fetch",
@@ -12,10 +12,10 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/gkoos/ffetch.git"
+    "url": "https://github.com/fetch-kit/ffetch.git"
   },
-  "homepage": "https://github.com/gkoos/ffetch#readme",
-  "bugs": "https://github.com/gkoos/ffetch/issues",
+  "homepage": "https://github.com/fetch-kit/ffetch#readme",
+  "bugs": "https://github.com/fetch-kit/ffetch/issues",
   "author": "Your Name <you@example.com>",
   "license": "MIT",
   "main": "./dist/index.cjs",
