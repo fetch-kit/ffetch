@@ -158,9 +158,9 @@ const api = createClient({
 
 Found an issue or want to improve the documentation?
 
-- **Issues**: [GitHub Issues](https://github.com/gkoos/ffetch/issues)
-- **Pull Requests**: [GitHub PRs](https://github.com/gkoos/ffetch/pulls)
-- **Discussions**: [GitHub Discussions](https://github.com/gkoos/ffetch/discussions)
+- **Issues**: [GitHub Issues](https://github.com/fetch-kit/ffetch/issues)
+- **Pull Requests**: [GitHub PRs](https://github.com/fetch-kit/ffetch/pulls)
+- **Discussions**: [GitHub Discussions](https://github.com/fetch-kit/ffetch/discussions)
 
 ## **License**
 

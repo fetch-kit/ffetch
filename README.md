@@ -1,9 +1,9 @@
 ![npm](https://img.shields.io/npm/v/@fetchkit/ffetch)
 ![Downloads](https://img.shields.io/npm/dm/@fetchkit/ffetch)
-![GitHub stars](https://img.shields.io/github/stars/gkoos/ffetch?style=social)
+![GitHub stars](https://img.shields.io/github/stars/fetch-kit/ffetch?style=social)
 
-![Build](https://github.com/gkoos/ffetch/actions/workflows/ci.yml/badge.svg)
-![codecov](https://codecov.io/gh/gkoos/ffetch/branch/main/graph/badge.svg)
+![Build](https://github.com/fetch-kit/ffetch/actions/workflows/ci.yml/badge.svg)
+![codecov](https://codecov.io/gh/fetch-kit/ffetch/branch/main/graph/badge.svg)
 
 ![MIT](https://img.shields.io/npm/l/@fetchkit/ffetch)
 ![bundlephobia](https://badgen.net/bundlephobia/minzip/@fetchkit/ffetch)
