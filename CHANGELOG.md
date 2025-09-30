@@ -1,5 +1,12 @@
 # ffetch
 
+## 3.4.2
+
+### Patch Changes
+
+- fab14c2: Fixed
+  - npm references in documentation
+
 ## 3.4.1
 
 ### Patch Changes
