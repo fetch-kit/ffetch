@@ -262,7 +262,7 @@ import createClient, {
   CircuitOpenError,
   RetryLimitError,
   NetworkError,
-} from '@gkoos/ffetch'
+} from '@fetchkit/ffetch'
 
 const client = createClient({ timeout: 1000, retries: 2 })
 

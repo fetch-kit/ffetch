@@ -5,7 +5,7 @@
 Creates a new HTTP client instance with the specified configuration. You can use ffetch as a drop-in replacement for native fetch, or wrap any fetch-compatible implementation (e.g., node-fetch, undici, SvelteKit/Next.js/Nuxt-provided fetch) for SSR, edge, and custom environments.
 
 ```typescript
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 
 const client = createClient({
   timeout: 5000,
@@ -142,7 +142,7 @@ interface HooksConfig {
 ### Usage Examples
 
 ```typescript
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 
 // Basic usage
 const client = createClient({

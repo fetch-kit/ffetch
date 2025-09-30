@@ -111,7 +111,7 @@
 ### **Basic HTTP Client**
 
 ```typescript
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 
 const api = createClient({
   timeout: 5000,

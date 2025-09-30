@@ -29,7 +29,7 @@ require('abortcontroller-polyfill/dist/polyfill-patch-fetch')
 import 'abort-controller-x/polyfill'
 
 // Now you can use ffetch
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 ```
 
 ### Node.js Specific Considerations
@@ -95,7 +95,7 @@ For older browsers, you need polyfills for `AbortSignal.timeout` and `AbortSigna
 
 <!-- Your app -->
 <script type="module">
-  import createClient from 'https://unpkg.com/@gkoos/ffetch/dist/index.min.js'
+  import createClient from 'https://unpkg.com/@fetchkit/ffetch/dist/index.min.js'
   // ... your code
 </script>
 ```
@@ -119,7 +119,7 @@ self.addEventListener('fetch', async (event) => {
 
 ```javascript
 // Works in web workers
-importScripts('https://unpkg.com/@gkoos/ffetch/dist/index.min.js')
+importScripts('https://unpkg.com/@fetchkit/ffetch/dist/index.min.js')
 
 const client = createClient()
 self.postMessage(await client('/api/data').then((r) => r.json()))
@@ -234,7 +234,7 @@ const client = createClient({
 
 ```html
 <script type="module">
-  import createClient from 'https://unpkg.com/@gkoos/ffetch/dist/index.min.js'
+  import createClient from 'https://unpkg.com/@fetchkit/ffetch/dist/index.min.js'
 
   const client = createClient()
   const data = await client('/api/data').then((r) => r.json())
@@ -244,7 +244,7 @@ const client = createClient({
 ### UMD (Legacy)
 
 ```html
-<script src="https://unpkg.com/@gkoos/ffetch/dist/index.umd.js"></script>
+<script src="https://unpkg.com/@fetchkit/ffetch/dist/index.umd.js"></script>
 <script>
   const client = FFetch.createClient()
   // ... use client
@@ -257,7 +257,7 @@ const client = createClient({
 
 ```jsx
 import { useEffect, useState } from 'react'
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 
 const client = createClient({ timeout: 5000 })
 
@@ -292,7 +292,7 @@ function DataComponent() {
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 
 const client = createClient({ timeout: 5000 })
 const data = ref(null)
@@ -324,7 +324,7 @@ onUnmounted(() => {
 ```svelte
 <script>
   import { onMount, onDestroy } from 'svelte'
-  import createClient from '@gkoos/ffetch'
+  import createClient from '@fetchkit/ffetch'
 
   const client = createClient({ timeout: 5000 })
   let data = null

@@ -1,15 +1,15 @@
-![npm](https://img.shields.io/npm/v/@gkoos/ffetch)
-![Downloads](https://img.shields.io/npm/dm/@gkoos/ffetch)
+![npm](https://img.shields.io/npm/v/@fetchkit/ffetch)
+![Downloads](https://img.shields.io/npm/dm/@fetchkit/ffetch)
 ![GitHub stars](https://img.shields.io/github/stars/gkoos/ffetch?style=social)
 
 ![Build](https://github.com/gkoos/ffetch/actions/workflows/ci.yml/badge.svg)
 ![codecov](https://codecov.io/gh/gkoos/ffetch/branch/main/graph/badge.svg)
 
-![MIT](https://img.shields.io/npm/l/@gkoos/ffetch)
-![bundlephobia](https://badgen.net/bundlephobia/minzip/@gkoos/ffetch)
-![Types](https://img.shields.io/npm/types/@gkoos/ffetch)
+![MIT](https://img.shields.io/npm/l/@fetchkit/ffetch)
+![bundlephobia](https://badgen.net/bundlephobia/minzip/@fetchkit/ffetch)
+![Types](https://img.shields.io/npm/types/@fetchkit/ffetch)
 
-# @gkoos/ffetch
+# @fetchkit/ffetch
 
 **A production-ready TypeScript-first drop-in replacement for native fetch, or any fetch-compatible implementation.**
 
@@ -31,13 +31,13 @@ ffetch can wrap any fetch-compatible implementation (native fetch, node-fetch, u
 ### Install
 
 ```bash
-npm install @gkoos/ffetch
+npm install @fetchkit/ffetch
 ```
 
 ### Basic Usage
 
 ```typescript
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 
 // Create a client with timeout and retries
 const api = createClient({
@@ -55,7 +55,7 @@ const data = await response.json()
 
 ```typescript
 // Example: SvelteKit, Next.js, Nuxt, or node-fetch
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 
 // Pass your framework's fetch implementation
 const api = createClient({
@@ -143,7 +143,7 @@ npm install abort-controller-x
 
 ```html
 <script type="module">
-  import createClient from 'https://unpkg.com/@gkoos/ffetch/dist/index.min.js'
+  import createClient from 'https://unpkg.com/@fetchkit/ffetch/dist/index.min.js'
 
   const api = createClient({ timeout: 5000 })
   const data = await api('/api/data').then((r) => r.json())

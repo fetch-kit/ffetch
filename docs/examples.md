@@ -1,6 +1,6 @@
 # Usage Examples
 
-Real-world examples and patterns for using `@gkoos/ffetch` in different scenarios.
+Real-world examples and patterns for using `@fetchkit/ffetch` in different scenarios.
 
 ## Basic Usage Patterns
 
@@ -9,7 +9,7 @@ Real-world examples and patterns for using `@gkoos/ffetch` in different scenario
 You can inspect the circuit breaker state at runtime using `client.circuitOpen` to avoid making requests when the circuit is open:
 
 ```typescript
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 
 const client = createClient({
   circuit: { threshold: 5, reset: 30000 },
@@ -28,7 +28,7 @@ if (client.circuitOpen) {
 ### Simple HTTP Client
 
 ```typescript
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 
 const api = createClient({
   timeout: 10000,
@@ -49,7 +49,7 @@ const newUser = await api('https://api.example.com/users', {
 ### REST API Client
 
 ```typescript
-import createClient, { type FFetch } from '@gkoos/ffetch'
+import createClient, { type FFetch } from '@fetchkit/ffetch'
 
 class ApiClient {
   private client: FFetch
@@ -117,7 +117,7 @@ const newUser = await api.post<User>('/users', { name: 'John' })
 ### Using ffetch with a Custom Fetch (e.g., node-fetch)
 
 ```typescript
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 import fetch from 'node-fetch'
 
 const client = createClient({ fetchHandler: fetch })
@@ -128,7 +128,7 @@ const data = await response.json()
 ### Injecting a Mock Fetch for Unit Tests
 
 ```typescript
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 
 function mockFetch(url, options) {
   return Promise.resolve(
@@ -147,7 +147,7 @@ const data = await response.json()
 ### Microservices Client
 
 ```typescript
-import createClient, { type FFetch } from '@gkoos/ffetch'
+import createClient, { type FFetch } from '@fetchkit/ffetch'
 
 interface ServiceConfig {
   baseUrl: string
@@ -253,7 +253,7 @@ const client = new MicroserviceClient({
 ### GraphQL Client
 
 ```typescript
-import createClient, { type FFetch } from '@gkoos/ffetch'
+import createClient, { type FFetch } from '@fetchkit/ffetch'
 
 class GraphQLClient {
   private client: FFetch
@@ -343,7 +343,7 @@ const user = await gql.query(
 ### File Upload Client
 
 ```typescript
-import createClient, { type FFetch } from '@gkoos/ffetch'
+import createClient, { type FFetch } from '@fetchkit/ffetch'
 
 class FileUploadClient {
   private client: FFetch
@@ -440,7 +440,7 @@ const results = await uploader.uploadMultiple(files, '/api/upload')
 For very large uploads, streaming operations, or long-running requests where you don't want any timeout:
 
 ```typescript
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 
 // Client with no timeout - useful for streaming or very large uploads
 const streamingClient = createClient({
@@ -483,7 +483,7 @@ async function longRequest() {
 ### Real-time Data Polling
 
 ```typescript
-import createClient, { AbortError, type FFetch } from '@gkoos/ffetch'
+import createClient, { AbortError, type FFetch } from '@fetchkit/ffetch'
 
 class DataPoller {
   private client: FFetch
@@ -554,7 +554,7 @@ window.addEventListener('beforeunload', () => poller.stopPolling())
 ### Caching with TTL
 
 ```typescript
-import createClient, { type FFetch } from '@gkoos/ffetch'
+import createClient, { type FFetch } from '@fetchkit/ffetch'
 
 interface CacheEntry<T> {
   data: T

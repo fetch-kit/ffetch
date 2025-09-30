@@ -12,7 +12,7 @@ const response = await fetch('https://api.example.com/data')
 const data = await response.json()
 
 // After: ffetch
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 const client = createClient()
 const response = await client('https://api.example.com/data')
 const data = await response.json()
@@ -50,7 +50,7 @@ ffetch can now be used as a drop-in wrapper for custom fetch implementations. Th
 Simply pass your custom fetch implementation using the `fetchHandler` option:
 
 ```typescript
-import createClient from '@gkoos/ffetch'
+import createClient from '@fetchkit/ffetch'
 import fetch from 'node-fetch'
 
 const client = createClient({ fetchHandler: fetch })
@@ -125,7 +125,7 @@ import createClient, {
   AbortError,
   TimeoutError,
   RetryLimitError,
-} from '@gkoos/ffetch'
+} from '@fetchkit/ffetch'
 
 const client = createClient({ timeout: 5000, retries: 2 })
 
@@ -261,7 +261,7 @@ const client = createClient({
 
 ```typescript
 // Step 3: Use enhanced error types
-import { NetworkError, TimeoutError, RetryLimitError } from '@gkoos/ffetch'
+import { NetworkError, TimeoutError, RetryLimitError } from '@fetchkit/ffetch'
 
 try {
   const response = await client('/api/data')
@@ -361,7 +361,7 @@ function myFetch(
 ): Promise<Response>
 
 // ffetch types - extends RequestInit
-import { FFetch, FFetchRequestInit } from '@gkoos/ffetch'
+import { FFetch, FFetchRequestInit } from '@fetchkit/ffetch'
 
 function myFFetch(
   input: RequestInfo | URL,
@@ -390,8 +390,8 @@ const options: FFetchRequestInit = {
 // ffetch - ~3KB gzipped additional size
 
 // Tree-shaking: Only import what you need
-import createClient from '@gkoos/ffetch' // Full library
-import { NetworkError, TimeoutError } from '@gkoos/ffetch' // Just error types
+import createClient from '@fetchkit/ffetch' // Full library
+import { NetworkError, TimeoutError } from '@fetchkit/ffetch' // Just error types
 ```
 
 ### Memory Usage
