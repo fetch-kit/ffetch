@@ -1,5 +1,13 @@
 # ffetch
 
+## 4.0.0
+
+### Major Changes
+
+- 512bd86: Added
+  - throwOnHttpError flag added to config
+  - unified and hardened error handling for all error types and edge cases
+
 ## 3.4.2
 
 ### Patch Changes
