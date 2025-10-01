@@ -114,14 +114,13 @@ try {
 
 Native `fetch`'s controversial behavior of not throwing errors for HTTP error status codes (4xx, 5xx) can lead to overlooked errors in applications. By default, `ffetch` follows this same pattern, returning a `Response` object regardless of the HTTP status code. However, with the `throwOnHttpError` flag, developers can configure `ffetch` to throw an `HttpError` for HTTP error responses, making error handling more explicit and robust. Note that this behavior is affected by retries and the circuit breaker - full details are explained in the [Error Handling documentation](./docs/errorhandling.md).
 
-```typescript
-
 ## Documentation
 
 | Topic                                         | Description                                                               |
 | --------------------------------------------- | ------------------------------------------------------------------------- |
 | **[Complete Documentation](./docs/index.md)** | **Start here** - Documentation index and overview                         |
 | **[API Reference](./docs/api.md)**            | Complete API documentation and configuration options                      |
+| **[Error Handling](./docs/errorhandling.md)** | Strategies for managing errors, including `throwOnHttpError`              |
 | **[Advanced Features](./docs/advanced.md)**   | Per-request overrides, pending requests, circuit breakers, custom errors  |
 | **[Hooks & Transformation](./docs/hooks.md)** | Lifecycle hooks, authentication, logging, request/response transformation |
 | **[Usage Examples](./docs/examples.md)**      | Real-world patterns: REST clients, GraphQL, file uploads, microservices   |
@@ -141,12 +140,11 @@ You can pass any fetch-compatible implementation (native fetch, node-fetch, undi
 
 #### "AbortSignal.any is not a function"
 
-```
+Solution: Install a polyfill for `AbortSignal.any`
 
-Solution: Install a polyfill for AbortSignal.any
+```bash
 npm install abort-controller-x
-
-````
+```
 
 ## CDN Usage
 
@@ -157,7 +155,7 @@ npm install abort-controller-x
   const api = createClient({ timeout: 5000 })
   const data = await api('/api/data').then((r) => r.json())
 </script>
-````
+```
 
 ## Fetch vs. Axios vs. `ffetch`
 
