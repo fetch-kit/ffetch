@@ -1,5 +1,12 @@
 # ffetch
 
+## 4.0.1
+
+### Patch Changes
+
+- 0c19c30: Fixed
+  - links to github repo in docs
+
 ## 4.0.0
 
 ### Major Changes
