@@ -1,5 +1,12 @@
 # ffetch
 
+## 4.0.2
+
+### Patch Changes
+
+- 33228f8: Fixed
+  - documentation
+
 ## 4.0.1
 
 ### Patch Changes
