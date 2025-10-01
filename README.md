@@ -176,8 +176,8 @@ npm install abort-controller-x
 
 ## Contributing
 
-- **Issues**: [GitHub Issues](https://github.com/gkoos/ffetch/issues)
-- **Pull Requests**: [GitHub PRs](https://github.com/gkoos/ffetch/pulls)
+- **Issues**: [GitHub Issues](https://github.com/fetch-kit/ffetch/issues)
+- **Pull Requests**: [GitHub PRs](https://github.com/fetch-kit/ffetch/pulls)
 - **Documentation**: Found in `./docs/` - PRs welcome!
 
 ## License
