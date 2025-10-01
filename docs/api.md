@@ -10,21 +10,28 @@ import createClient from '@fetchkit/ffetch'
 const client = createClient({
   timeout: 5000,
   retries: 3,
+  throwOnHttpError: true, // <-- Throws HttpError for 4xx/5xx/429 after all retries
   // ... other options
 })
+
+// Example: throwOnHttpError usage
+const clientStrict = createClient({ throwOnHttpError: true })
+// Throws HttpError for 404, 500, 429, etc.
+await clientStrict('https://example.com/404') // throws
 ```
 
 ### Configuration Options
 
-| Option         | Type                                                                                                                      | Default                             | Description                                                                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `timeout`      | `number` (ms)                                                                                                             | `5000`                              | Whole-request timeout in milliseconds. Use `0` to disable timeout                                                                               |
-| `retries`      | `number`                                                                                                                  | `0`                                 | Maximum retry attempts                                                                                                                          |
-| `retryDelay`   | `number \| (ctx: { attempt, request, response, error }) => number`                                                        | Exponential backoff + jitter        | Delay between retries                                                                                                                           |
-| `shouldRetry`  | `(ctx: { attempt, request, response, error }) => boolean`                                                                 | Retries on network errors, 5xx, 429 | Custom retry logic                                                                                                                              |
-| `circuit`      | `{ threshold: number, reset: number }`                                                                                    | `undefined`                         | Circuit-breaker configuration                                                                                                                   |
-| `hooks`        | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete, transformRequest, transformResponse }` | `{}`                                | Lifecycle hooks and transformers                                                                                                                |
-| `fetchHandler` | `(input: RequestInfo \| URL, init?: RequestInit) => Promise<Response>`                                                    | `global fetch`                      | Custom fetch-compatible implementation to wrap (e.g., SvelteKit, Next.js, Nuxt, node-fetch, undici, or any polyfill). Defaults to global fetch. |
+| Option             | Type                                                                                                                      | Default                             | Description                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `timeout`          | `number` (ms)                                                                                                             | `5000`                              | Whole-request timeout in milliseconds. Use `0` to disable timeout                                                                                       |
+| `retries`          | `number`                                                                                                                  | `0`                                 | Maximum retry attempts                                                                                                                                  |
+| `retryDelay`       | `number \| (ctx: { attempt, request, response, error }) => number`                                                        | Exponential backoff + jitter        | Delay between retries                                                                                                                                   |
+| `shouldRetry`      | `(ctx: { attempt, request, response, error }) => boolean`                                                                 | Retries on network errors, 5xx, 429 | Custom retry logic                                                                                                                                      |
+| `throwOnHttpError` | `boolean`                                                                                                                 | `false`                             | If true, throws an `HttpError` for all HTTP error responses (all 4xx and 5xx) after all retries are exhausted. Otherwise, returns the final `Response`. |
+| `circuit`          | `{ threshold: number, reset: number }`                                                                                    | `undefined`                         | Circuit-breaker configuration                                                                                                                           |
+| `hooks`            | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete, transformRequest, transformResponse }` | `{}`                                | Lifecycle hooks and transformers                                                                                                                        |
+| `fetchHandler`     | `(input: RequestInfo \| URL, init?: RequestInit) => Promise<Response>`                                                    | `global fetch`                      | Custom fetch-compatible implementation to wrap (e.g., SvelteKit, Next.js, Nuxt, node-fetch, undici, or any polyfill). Defaults to global fetch.         |
 
 ### Return Type
 
@@ -37,6 +44,7 @@ type FFetch = (
     retries?: number
     retryDelay?: number | ((ctx: RetryContext) => number)
     shouldRetry?: (ctx: RetryContext) => boolean
+    throwOnHttpError?: boolean
     circuit?: { threshold: number; reset: number }
     hooks?: HooksConfig
     fetchHandler?: (

@@ -37,3 +37,9 @@ export class NetworkError extends BaseError {
     super('NetworkError', message, cause)
   }
 }
+
+export class HttpError extends BaseError {
+  constructor(message = 'HTTP error occurred', cause?: unknown) {
+    super('HttpError', message, cause)
+  }
+}

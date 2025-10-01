@@ -66,6 +66,12 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     }
     await effectiveHooks.before?.(request)
 
+    // Determine throwOnHttpError (per-request overrides client default)
+    const effectiveThrowOnHttpError =
+      typeof init.throwOnHttpError !== 'undefined'
+        ? init.throwOnHttpError
+        : (opts.throwOnHttpError ?? false)
+
     // Create timeout signal (manual implementation if AbortSignal.timeout not available)
     function createTimeoutSignal(timeout: number): AbortSignal {
       if (typeof AbortSignal?.timeout === 'function') {
@@ -145,72 +151,35 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         return retrying
       }
 
-      function mapToCustomError(err: unknown): unknown {
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          if (timeoutSignal?.aborted && (!userSignal || !userSignal.aborted)) {
-            return new TimeoutError('signal timed out', err)
-          } else {
-            return new AbortError('Request was aborted', err)
-          }
-        } else if (
-          err instanceof TypeError &&
-          /NetworkError|network error|failed to fetch|lost connection|NetworkError when attempting to fetch resource/i.test(
-            err.message
-          )
-        ) {
-          return new NetworkError(err.message, err)
-        }
-        return err
-      }
-
-      async function handleError(err: unknown): Promise<never> {
-        err = mapToCustomError(err)
-        // If user aborted, always throw AbortError, not RetryLimitError
-        if (userSignal?.aborted) {
-          const abortErr = new AbortError('Request was aborted by user')
-          await effectiveHooks.onAbort?.(request)
-          await effectiveHooks.onError?.(request, abortErr)
-          await effectiveHooks.onComplete?.(request, undefined, abortErr)
-          throw abortErr
-        }
-        // If the error is a custom error, re-throw it directly (do not wrap)
-        if (
-          err instanceof TimeoutError ||
-          err instanceof NetworkError ||
-          err instanceof AbortError
-        ) {
-          if (err instanceof TimeoutError) {
-            await effectiveHooks.onTimeout?.(request)
-          }
-          if (err instanceof AbortError) {
-            await effectiveHooks.onAbort?.(request)
-          }
-          await effectiveHooks.onError?.(request, err)
-          await effectiveHooks.onComplete?.(request, undefined, err)
-          throw err
-        }
-        // Otherwise, throw RetryLimitError after all retries are exhausted
-        const retryErr = new RetryLimitError(
-          typeof err === 'object' &&
-          err &&
-          'message' in err &&
-          typeof (err as { message?: unknown }).message === 'string'
-            ? (err as { message: string }).message
-            : 'Retry limit reached'
-        )
-        await effectiveHooks.onError?.(request, retryErr)
-        await effectiveHooks.onComplete?.(request, undefined, retryErr)
-        throw retryErr
-      }
-
+      let lastResponse: Response | undefined = undefined
       try {
         let res = await retry(
           async () => {
-            // Use AbortSignal.throwIfAborted() before starting fetch
+            // Check for aborts before making the request
+            if (userSignal?.aborted) {
+              effectiveHooks.onAbort?.(request)
+              // Throw AbortError for user aborts, no cause needed
+              throw new AbortError('Request was aborted by user')
+            }
+            if (timeoutSignal?.aborted) {
+              effectiveHooks.onTimeout?.(request)
+              throw new TimeoutError('signal timed out')
+            }
             if (typeof combinedSignal?.throwIfAborted === 'function') {
               combinedSignal.throwIfAborted()
             } else if (combinedSignal?.aborted) {
-              throw new AbortError('Request was aborted')
+              if (userSignal?.aborted) {
+                effectiveHooks.onAbort?.(request)
+                throw new AbortError('Request was aborted by user')
+              } else if (timeoutSignal?.aborted) {
+                effectiveHooks.onTimeout?.(request)
+                throw new TimeoutError('signal timed out')
+              } else {
+                throw new AbortError(
+                  'Request was aborted',
+                  new DOMException('Aborted', 'AbortError')
+                )
+              }
             }
             const reqWithSignal = new Request(request, {
               signal: combinedSignal,
@@ -218,16 +187,41 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
             try {
               const handler = fetchHandler ?? fetch
               const response = await handler(reqWithSignal)
-              // Circuit breaker: record result
-              if (breaker) {
-                if (breaker.recordResult(response, undefined, request)) {
-                  throw new Error(`HTTP error: ${response.status}`)
-                }
+              lastResponse = response
+              if (
+                breaker &&
+                (response.status >= 500 || response.status === 429)
+              ) {
+                breaker.recordResult(response, undefined, request)
               }
               return response
             } catch (err) {
               if (breaker) breaker.recordResult(undefined, err, request)
-              throw mapToCustomError(err)
+              if (err instanceof DOMException && err.name === 'AbortError') {
+                if (
+                  timeoutSignal?.aborted &&
+                  (!userSignal || !userSignal.aborted)
+                ) {
+                  effectiveHooks.onTimeout?.(request)
+                  throw new TimeoutError('signal timed out', err)
+                } else if (userSignal?.aborted) {
+                  effectiveHooks.onAbort?.(request)
+                  throw new AbortError('Request was aborted by user')
+                } else {
+                  throw new AbortError(
+                    'Request was aborted',
+                    new DOMException('Aborted', 'AbortError')
+                  )
+                }
+              } else if (
+                err instanceof TypeError &&
+                /NetworkError|network error|failed to fetch|lost connection|NetworkError when attempting to fetch resource/i.test(
+                  err.message
+                )
+              ) {
+                throw new NetworkError(err.message, err)
+              }
+              throw err
             }
           },
           effectiveRetries,
@@ -240,10 +234,70 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         }
         await effectiveHooks.after?.(request, res)
         await effectiveHooks.onComplete?.(request, res, undefined)
+        // After all retries, if throwOnHttpError is true and final response is error, throw HttpError
+        if (
+          effectiveThrowOnHttpError &&
+          ((res.status >= 400 && res.status < 500 && res.status !== 429) ||
+            res.status >= 500 ||
+            res.status === 429)
+        ) {
+          const { HttpError } = await import('./error.js')
+          throw new HttpError(
+            `HTTP error: ${res.status} ${res.statusText}`,
+            res
+          )
+        }
         return res
       } catch (err: unknown) {
-        await handleError(err)
-        throw new Error('Unreachable: handleError should always throw')
+        // If lastResponse is set (any status), return or throw as needed
+        if (lastResponse) {
+          const resp = lastResponse as Response
+          // Only throw if throwOnHttpError is true and final response is 4xx (not 429), 5xx, or 429
+          if (
+            effectiveThrowOnHttpError &&
+            ((resp.status >= 400 && resp.status < 500 && resp.status !== 429) ||
+              resp.status >= 500 ||
+              resp.status === 429)
+          ) {
+            const { HttpError } = await import('./error.js')
+            throw new HttpError(
+              `HTTP error: ${resp.status} ${resp.statusText}`,
+              resp
+            )
+          }
+          return resp
+        }
+        // If the error is a known error type, re-throw it directly and call correct hook
+        if (err instanceof TimeoutError) {
+          await effectiveHooks.onTimeout?.(request)
+          await effectiveHooks.onError?.(request, err)
+          await effectiveHooks.onComplete?.(request, undefined, err)
+          throw err
+        }
+        if (err instanceof AbortError) {
+          await effectiveHooks.onAbort?.(request)
+          await effectiveHooks.onError?.(request, err)
+          await effectiveHooks.onComplete?.(request, undefined, err)
+          throw err
+        }
+        if (err instanceof NetworkError) {
+          await effectiveHooks.onError?.(request, err)
+          await effectiveHooks.onComplete?.(request, undefined, err)
+          throw err
+        }
+        // Otherwise, wrap in RetryLimitError
+        const retryErr = new RetryLimitError(
+          typeof err === 'object' &&
+          err &&
+          'message' in err &&
+          typeof (err as { message?: unknown }).message === 'string'
+            ? (err as { message: string }).message
+            : 'Retry limit reached',
+          err
+        )
+        await effectiveHooks.onError?.(request, retryErr)
+        await effectiveHooks.onComplete?.(request, undefined, retryErr)
+        throw retryErr
       }
     }
 

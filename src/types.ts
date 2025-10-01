@@ -12,6 +12,7 @@ export interface FFetchOptions {
   retries?: number
   retryDelay?: number | ((ctx: RetryContext) => number)
   shouldRetry?: (ctx: RetryContext) => boolean
+  throwOnHttpError?: boolean
   circuit?: { threshold: number; reset: number }
   hooks?: Hooks
   fetchHandler?: (

@@ -25,6 +25,7 @@ ffetch can wrap any fetch-compatible implementation (native fetch, node-fetch, u
 - **Per-request overrides** – customize behavior on a per-request basis
 - **Universal** – Node.js, Browser, Cloudflare Workers, React Native
 - **Zero runtime deps** – ships as dual ESM/CJS
+- **Configurable error handling** – custom error types and `throwOnHttpError` flag to throw on HTTP errors
 
 ## Quick Start
 
@@ -109,6 +110,12 @@ try {
 }
 ```
 
+### Custom Error Handling with `throwOnHttpError`
+
+Native `fetch`'s controversial behavior of not throwing errors for HTTP error status codes (4xx, 5xx) can lead to overlooked errors in applications. By default, `ffetch` follows this same pattern, returning a `Response` object regardless of the HTTP status code. However, with the `throwOnHttpError` flag, developers can configure `ffetch` to throw an `HttpError` for HTTP error responses, making error handling more explicit and robust. Note that this behavior is affected by retries and the circuit breaker - full details are explained in the [Error Handling documentation](./docs/errorhandling.md).
+
+```typescript
+
 ## Documentation
 
 | Topic                                         | Description                                                               |
@@ -135,9 +142,11 @@ You can pass any fetch-compatible implementation (native fetch, node-fetch, undi
 #### "AbortSignal.any is not a function"
 
 ```
+
 Solution: Install a polyfill for AbortSignal.any
 npm install abort-controller-x
-```
+
+````
 
 ## CDN Usage
 
@@ -148,7 +157,7 @@ npm install abort-controller-x
   const api = createClient({ timeout: 5000 })
   const data = await api('/api/data').then((r) => r.json())
 </script>
-```
+````
 
 ## Fetch vs. Axios vs. `ffetch`
 
