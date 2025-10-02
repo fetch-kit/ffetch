@@ -1,6 +1,6 @@
 {
   "name": "@fetchkit/ffetch",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "description": "Fetch wrapper with configurable timeouts, retries, and TypeScript-first DX",
   "keywords": [
     "fetch",

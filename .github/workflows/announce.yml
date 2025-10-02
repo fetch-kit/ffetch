@@ -1,0 +1,38 @@
+name: Announce fetch-kit Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # triggers on semantic version tags
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Extract latest changelog
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Tag: $TAG"
+          
+          # Extract the latest version block from CHANGELOG.md (Changesets format)
+          LATEST_CHANGES=$(awk "/## $TAG/{flag=1; next}/## /{flag=0}flag" CHANGELOG.md)
+          
+          # Escape double quotes for JSON
+          LATEST_CHANGES=$(echo "$LATEST_CHANGES" | sed 's/"/\\"/g')
+          
+          # Save to environment variable
+          echo "LATEST_CHANGES<<EOF" >> $GITHUB_ENV
+          echo "$LATEST_CHANGES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Send Discord Webhook
+        run: |
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "{\"content\": \"**New fetch-kit Release: $TAG**\nRepository: $GITHUB_REPOSITORY\n\`\`\`\n${LATEST_CHANGES}\n\`\`\`\"}" \
+               ${{ secrets.DISCORD_WEBHOOK }}
