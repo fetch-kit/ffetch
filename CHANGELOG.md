@@ -1,5 +1,12 @@
 # ffetch
 
+## 4.0.10
+
+### Patch Changes
+
+- 5a24353: Fixed
+  - Github Action to post announcement to Discord
+
 ## 4.0.9
 
 ### Patch Changes
