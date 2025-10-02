@@ -1,36 +1,20 @@
-name: Announce fetch-kit Release
+name: Announce Release on Discord
 
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*'
 
 jobs:
   announce:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-
-      - name: Announce to Discord
+      - name: Post to Discord
         run: |
-          # Get the tag that triggered the workflow
-          TAG=${GITHUB_REF#refs/tags/}  # e.g., v4.0.6
-          VERSION=${TAG#v}              # remove leading 'v' to match CHANGELOG.md headers
-
-          # Extract the changelog block under that version until the next '##'
-          LATEST=$(sed -n "/^## $VERSION$/,/^## /{ /^## /!p }" CHANGELOG.md)
-
-          # If nothing found, fallback
-          if [ -z "$LATEST" ]; then
-            LATEST="(no changelog entry found for $VERSION)"
-          fi
-
-          # Escape JSON special characters
-          LATEST_ESC=$(echo "$LATEST" | sed 's/\\/\\\\/g; s/"/\\"/g')
-
-          # Send Discord message
-          curl -sS -H "Content-Type: application/json" \
-            -X POST \
-            -d "{\"content\": \"📦 **New fetch-kit Release: $TAG**\nRepository: $GITHUB_REPOSITORY\n\`\`\`\n$LATEST_ESC\n\`\`\`\"}" \
-            ${{ secrets.DISCORD_WEBHOOK }}
+          payload=$(jq -n \
+            --arg content "New fetch-kit Release: $GITHUB_REF_NAME" \
+            '{content: $content}')
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "${{ secrets.DISCORD_WEBHOOK }}"
