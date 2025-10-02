@@ -8,24 +8,26 @@ on:
 jobs:
   announce:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Post to Discord
+      - name: Post release to Discord
         run: |
-          TAG=${GITHUB_REF#refs/tags/}        # e.g., v4.0.8
-          VERSION=${TAG#v}                    # remove 'v' to match CHANGELOG.md headers
+          TAG=${GITHUB_REF#refs/tags/}       # e.g., v4.0.8
+          VERSION=${TAG#v}                   # remove 'v' to match changelog headers
 
-          # extract lines under version header until next '##'
+          # Extract changelog block for this version
           NOTES=$(sed -n "/^## $VERSION$/,/^## /{ /^## /!p }" CHANGELOG.md | sed '/^[[:space:]]*$/d')
 
-          # fallback if nothing found
           if [ -z "$NOTES" ]; then
             NOTES="(no changelog entry found for $VERSION)"
           fi
 
-          # construct JSON safely with jq
-          PAYLOAD=$(jq -n --arg content "📦 **New fetch-kit Release: $TAG**\nRepository: $GITHUB_REPOSITORY\n\`\`\`\n$NOTES\n\`\`\`" \
-                        '{content: $content}')
+          # Construct JSON with jq, preserving literal line breaks
+          PAYLOAD=$(jq -Rn --arg tag "$TAG" --arg repo "$GITHUB_REPOSITORY" --arg notes "$NOTES" \
+            '{content: ("📦 **New fetch-kit Release: \($tag)**\nRepository: \($repo)\n```\n\($notes)\n```")}')
 
+          # Send to Discord webhook
           curl -sS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" ${{ secrets.DISCORD_WEBHOOK }}
