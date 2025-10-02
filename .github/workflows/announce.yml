@@ -7,26 +7,15 @@ on:
 
 jobs:
   announce:
-    runs-on: windows-latest
-
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Extract changelog for tag
-        id: changelog
-        shell: pwsh
+      - name: Announce to Discord
         run: |
-          $TAG = "${{ github.ref_name }}"             # tag pushed
-          $TAG_NO_V = $TAG.TrimStart('v')
-          $found = $false
-
-          $lines = Get-Content CHANGELOG.md | ForEach-Object {
-              if ($_ -match "^##\s+$TAG" -or $_ -match "^##\s+$TAG_NO_V") {
-                  $found = $true
-                  return
-              }
-              if ($found -and $_ -match "^##\s+") {
-                  $found = $false
-              }
-              if ($found) { $_ }
+          TAG=${GITHUB_REF#refs/tags/}
+          LATEST=$(sed -n "/^## $TAG$/,/^## /{ /^## /!p }" CHANGELOG.md | sed 's/"/\\"/g')
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "{\"content\": \"📦 **New fetch-kit Release: $TAG**\n$LATEST\"}" \
+               ${{ secrets.DISCORD_WEBHOOK }}
