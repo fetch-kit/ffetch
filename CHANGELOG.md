@@ -1,5 +1,12 @@
 # ffetch
 
+## 4.0.7
+
+### Patch Changes
+
+- 8f0075f: Fixed
+  - Discord announcement GitHub action
+
 ## 4.0.6
 
 ### Patch Changes
