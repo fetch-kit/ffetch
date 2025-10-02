@@ -27,7 +27,7 @@ jobs:
 
           # Construct JSON with jq, preserving literal line breaks
           PAYLOAD=$(jq -Rn --arg tag "$TAG" --arg repo "$GITHUB_REPOSITORY" --arg notes "$NOTES" \
-            '{content: ("📦 **New fetch-kit Release: \($tag)**\nRepository: \($repo)\n```\n\($notes)\n```")}')
+            '{content: ("**New fetch-kit Release**\nRepository: \($repo) - version: \($tag)\n```\n\($notes)\n```")}')
 
           # Send to Discord webhook
           curl -sS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" ${{ secrets.DISCORD_WEBHOOK }}
