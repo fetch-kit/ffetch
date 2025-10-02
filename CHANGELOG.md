@@ -1,5 +1,12 @@
 # ffetch
 
+## 4.0.12
+
+### Patch Changes
+
+- 0ceab1b: Added
+  - Discord section to readme
+
 ## 4.0.11
 
 ### Patch Changes

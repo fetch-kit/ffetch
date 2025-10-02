@@ -172,6 +172,12 @@ npm install abort-controller-x
 | Modern APIs          | ✅ Web standards          | ❌ XMLHttpRequest    | ✅ Fetch + modern features                                                             |
 | Custom Fetch Support | ❌ No (global only)       | ❌ No                | ✅ Yes (wrap any fetch-compatible implementation, including framework or custom fetch) |
 
+## Join the Community
+
+Got questions, want to discuss features, or share examples? Join the **Fetch-Kit Discord server**:
+
+[![Discord](https://img.shields.io/badge/Discord-Join_Fetch--Kit-7289DA?logo=discord&logoColor=white)](https://discord.gg/sdyPBPCDUg)
+
 ## Contributing
 
 - **Issues**: [GitHub Issues](https://github.com/fetch-kit/ffetch/issues)
