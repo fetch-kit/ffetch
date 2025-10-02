@@ -1,5 +1,12 @@
 # ffetch
 
+## 4.0.11
+
+### Patch Changes
+
+- 2485bc8: Fixed
+  - Discord announcement format
+
 ## 4.0.10
 
 ### Patch Changes
