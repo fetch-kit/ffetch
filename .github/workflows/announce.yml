@@ -9,13 +9,28 @@ jobs:
   announce:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
       - name: Announce to Discord
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
-          LATEST=$(sed -n "/^## $TAG$/,/^## /{ /^## /!p }" CHANGELOG.md | sed 's/"/\\"/g')
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d "{\"content\": \"📦 **New fetch-kit Release: $TAG**\n$LATEST\"}" \
-               ${{ secrets.DISCORD_WEBHOOK }}
+          # Get the tag that triggered the workflow
+          TAG=${GITHUB_REF#refs/tags/}  # e.g., v4.0.6
+          VERSION=${TAG#v}              # remove leading 'v' to match CHANGELOG.md headers
+
+          # Extract the changelog block under that version until the next '##'
+          LATEST=$(sed -n "/^## $VERSION$/,/^## /{ /^## /!p }" CHANGELOG.md)
+
+          # If nothing found, fallback
+          if [ -z "$LATEST" ]; then
+            LATEST="(no changelog entry found for $VERSION)"
+          fi
+
+          # Escape JSON special characters
+          LATEST_ESC=$(echo "$LATEST" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+          # Send Discord message
+          curl -sS -H "Content-Type: application/json" \
+            -X POST \
+            -d "{\"content\": \"📦 **New fetch-kit Release: $TAG**\nRepository: $GITHUB_REPOSITORY\n\`\`\`\n$LATEST_ESC\n\`\`\`\"}" \
+            ${{ secrets.DISCORD_WEBHOOK }}
