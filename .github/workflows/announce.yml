@@ -1,20 +1,31 @@
-name: Announce Release on Discord
+name: Announce fetch-kit Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
 
 jobs:
   announce:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
+
       - name: Post to Discord
         run: |
-          payload=$(jq -n \
-            --arg content "New fetch-kit Release: $GITHUB_REF_NAME" \
-            '{content: $content}')
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -d "$payload" \
-            "${{ secrets.DISCORD_WEBHOOK }}"
+          TAG=${GITHUB_REF#refs/tags/}        # e.g., v4.0.8
+          VERSION=${TAG#v}                    # remove 'v' to match CHANGELOG.md headers
+
+          # extract lines under version header until next '##'
+          NOTES=$(sed -n "/^## $VERSION$/,/^## /{ /^## /!p }" CHANGELOG.md | sed '/^[[:space:]]*$/d')
+
+          # fallback if nothing found
+          if [ -z "$NOTES" ]; then
+            NOTES="(no changelog entry found for $VERSION)"
+          fi
+
+          # construct JSON safely with jq
+          PAYLOAD=$(jq -n --arg content "📦 **New fetch-kit Release: $TAG**\nRepository: $GITHUB_REPOSITORY\n\`\`\`\n$NOTES\n\`\`\`" \
+                        '{content: $content}')
+
+          curl -sS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" ${{ secrets.DISCORD_WEBHOOK }}
