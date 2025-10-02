@@ -1,5 +1,12 @@
 # ffetch
 
+## 4.0.6
+
+### Patch Changes
+
+- 1f7a45c: Fixed
+  - Discord announcement
+
 ## 4.0.5
 
 ### Patch Changes
