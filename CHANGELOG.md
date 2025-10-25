@@ -1,5 +1,12 @@
 # ffetch
 
+## 4.1.0
+
+### Minor Changes
+
+- cff44a3: Added
+  - Optional request deduplication with customisable hash
+
 ## 4.0.12
 
 ### Patch Changes
