@@ -23,15 +23,56 @@ await clientStrict('https://example.com/404') // throws
 ### Configuration Options
 
 | Option             | Type                                                                                                                      | Default                             | Description                                                                                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `timeout`          | `number` (ms)                                                                                                             | `5000`                              | Whole-request timeout in milliseconds. Use `0` to disable timeout                                                                                       |
 | `retries`          | `number`                                                                                                                  | `0`                                 | Maximum retry attempts                                                                                                                                  |
 | `retryDelay`       | `number \| (ctx: { attempt, request, response, error }) => number`                                                        | Exponential backoff + jitter        | Delay between retries                                                                                                                                   |
 | `shouldRetry`      | `(ctx: { attempt, request, response, error }) => boolean`                                                                 | Retries on network errors, 5xx, 429 | Custom retry logic                                                                                                                                      |
+| `dedupe`           | `boolean`                                                                                                                 | `false`                             | If true, enables automatic deduplication of in-flight identical requests.                                                                               |
+| `dedupeHashFn`     | `(params: DedupeHashParams) => string                                                                                     | undefined`                          | `dedupeRequestHash`                                                                                                                                     | Custom function to generate deduplication keys. Use exported `DedupeHashParams` type for params. |
 | `throwOnHttpError` | `boolean`                                                                                                                 | `false`                             | If true, throws an `HttpError` for all HTTP error responses (all 4xx and 5xx) after all retries are exhausted. Otherwise, returns the final `Response`. |
 | `circuit`          | `{ threshold: number, reset: number }`                                                                                    | `undefined`                         | Circuit-breaker configuration                                                                                                                           |
 | `hooks`            | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete, transformRequest, transformResponse }` | `{}`                                | Lifecycle hooks and transformers                                                                                                                        |
 | `fetchHandler`     | `(input: RequestInfo \| URL, init?: RequestInit) => Promise<Response>`                                                    | `global fetch`                      | Custom fetch-compatible implementation to wrap (e.g., SvelteKit, Next.js, Nuxt, node-fetch, undici, or any polyfill). Defaults to global fetch.         |
+
+### Deduplication
+
+#### `dedupe` (boolean)
+
+Enable automatic deduplication of in-flight identical requests. When enabled, requests with the same deduplication key will share a single network call and response promise.
+
+#### `dedupeHashFn` (function)
+
+Custom function to generate deduplication keys. Receives a `DedupeHashParams` object (exported from the package) and should return a string key or `undefined` to skip deduplication.
+
+**Type:**
+
+```typescript
+import type { DedupeHashParams } from '@fetchkit/ffetch'
+const client = createClient({
+  dedupe: true,
+  dedupeHashFn: (params: DedupeHashParams) =>
+    `${params.method}|${params.url}|${params.body}`,
+})
+```
+
+**Default:**
+Uses the built-in `dedupeRequestHash` function, which considers method, URL, and body, and skips deduplication for FormData and ReadableStream bodies.
+
+**Limitations:**
+
+- Deduplication is off by default.
+- Stream bodies (`ReadableStream`, `FormData`) are not deduped.
+- Use with caution for non-idempotent requests (e.g., POST).
+- Ensure your custom hash function uniquely identifies requests to avoid accidental deduplication.
+
+See [deduplication.md](./deduplication.md) for full details.
+
+### Type Exports
+
+The following types are exported for custom configuration:
+
+- `DedupeHashParams` (for custom dedupe hash functions)
 
 ### Return Type
 

@@ -69,6 +69,7 @@
 | ------------------------------ | ------------------------------------------------------------ |
 | Get started quickly            | [README.md](../README.md)                                    |
 | Error handling                 | [errorhandling.md](./errorhandling.md)                       |
+| Deduplicate requests           | [deduplication.md](./deduplication.md)                       |
 | Migrate from native fetch      | [migration.md](./migration.md)                               |
 | See all configuration options  | [api.md](./api.md)                                           |
 | Handle errors gracefully       | [advanced.md](./advanced.md#custom-error-handling)           |

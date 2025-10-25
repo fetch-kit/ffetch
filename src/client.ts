@@ -4,6 +4,7 @@ import type {
   FFetchRequestInit,
   PendingRequest,
 } from './types.js'
+import { dedupeRequestHash } from './dedupeRequestHash.js'
 import { retry, defaultDelay } from './retry.js'
 import { shouldRetry as defaultShouldRetry } from './should-retry.js'
 import { CircuitBreaker } from './circuit.js'
@@ -16,6 +17,15 @@ import {
 } from './error.js'
 
 export function createClient(opts: FFetchOptions = {}): FFetch {
+  // Track in-flight deduped requests and their resolvers
+  const dedupeMap = new Map<
+    string,
+    {
+      promise: Promise<Response>
+      resolve: (value: Response | PromiseLike<Response>) => void
+      reject: (reason?: unknown) => void
+    }
+  >()
   const {
     timeout: clientDefaultTimeout = 5_000,
     retries: clientDefaultRetries = 0,
@@ -24,6 +34,8 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     hooks: clientDefaultHooks = {},
     circuit: clientDefaultCircuit,
     fetchHandler,
+    dedupe = false,
+    dedupeHashFn = dedupeRequestHash,
   } = opts
 
   const breaker = clientDefaultCircuit
@@ -56,8 +68,54 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     input: RequestInfo | URL,
     init: FFetchRequestInit = {}
   ) => {
-    // No longer require AbortSignal.timeout - we'll implement it manually if needed
+    // Deduplication logic
+    const effectiveDedupe =
+      typeof init.dedupe !== 'undefined' ? init.dedupe : dedupe
+    const effectiveDedupeHashFn = init.dedupeHashFn || dedupeHashFn
+    let dedupeKey: string | undefined
+
     let request = new Request(input, init)
+    if (effectiveDedupe) {
+      dedupeKey = effectiveDedupeHashFn({
+        method: request.method,
+        url: request.url,
+        body: init.body ?? null,
+        headers: request.headers,
+        signal:
+          init.signal === undefined || init.signal === null
+            ? undefined
+            : init.signal,
+        requestInit: init,
+        request,
+      })
+      if (dedupeKey) {
+        if (dedupeMap.has(dedupeKey)) {
+          return dedupeMap.get(dedupeKey)!.promise
+        }
+        let settled = false
+        let resolveFn: (value: Response | PromiseLike<Response>) => void
+        let rejectFn: (reason?: unknown) => void
+        const inFlightPromise = new Promise<Response>((resolve, reject) => {
+          resolveFn = (value) => {
+            if (!settled) {
+              settled = true
+              resolve(value)
+            }
+          }
+          rejectFn = (reason) => {
+            if (!settled) {
+              settled = true
+              reject(reason)
+            }
+          }
+        })
+        dedupeMap.set(dedupeKey, {
+          promise: inFlightPromise,
+          resolve: resolveFn!,
+          reject: rejectFn!,
+        })
+      }
+    }
 
     // Merge hooks: per-request hooks override client hooks, but fallback to client hooks
     const effectiveHooks = { ...clientDefaultHooks, ...(init.hooks || {}) }
@@ -77,25 +135,20 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       if (typeof AbortSignal?.timeout === 'function') {
         return AbortSignal.timeout(timeout)
       }
-
-      // Manual implementation for older environments
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), timeout)
-
-      // Clean up timeout if signal is aborted early by other means
       controller.signal.addEventListener(
         'abort',
         () => clearTimeout(timeoutId),
         { once: true }
       )
-
       return controller.signal
     }
 
-    // AbortSignal.timeout/any logic ---
+    // AbortSignal.timeout/any logic
     const effectiveTimeout = init.timeout ?? clientDefaultTimeout
     const userSignal = init.signal
-    const transformedSignal = request.signal // Extract signal from transformed request
+    const transformedSignal = request.signal
     let timeoutSignal: AbortSignal | undefined = undefined
     let combinedSignal: AbortSignal | undefined = undefined
     let controller: AbortController | undefined = undefined
@@ -104,7 +157,6 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       timeoutSignal = createTimeoutSignal(effectiveTimeout)
     }
 
-    // Collect all signals that need to be combined
     const signals: AbortSignal[] = []
     if (userSignal) signals.push(userSignal)
     if (transformedSignal && transformedSignal !== userSignal) {
@@ -112,9 +164,6 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     }
     if (timeoutSignal) signals.push(timeoutSignal)
 
-    // Use AbortSignal.any for signal combination. Requires native support or a polyfill.
-    // If not available, instruct users to install a polyfill for environments lacking AbortSignal.any.
-    // there are always 1 or more signals
     if (signals.length === 1) {
       combinedSignal = signals[0]
       controller = new AbortController()
@@ -127,6 +176,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       combinedSignal = AbortSignal.any(signals)
       controller = new AbortController()
     }
+
     const retryWithHooks = async () => {
       const effectiveRetries = init.retries ?? clientDefaultRetries
       const effectiveRetryDelay =
@@ -135,7 +185,6 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
           : clientDefaultRetryDelay
       const effectiveShouldRetry = init.shouldRetry ?? clientDefaultShouldRetry
 
-      // Wrap shouldRetry to call onRetry hook
       let attempt = 0
       const shouldRetryWithHook = (ctx: import('./types').RetryContext) => {
         attempt = ctx.attempt
@@ -155,10 +204,8 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       try {
         let res = await retry(
           async () => {
-            // Check for aborts before making the request
             if (userSignal?.aborted) {
               effectiveHooks.onAbort?.(request)
-              // Throw AbortError for user aborts, no cause needed
               throw new AbortError('Request was aborted by user')
             }
             if (timeoutSignal?.aborted) {
@@ -234,7 +281,6 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         }
         await effectiveHooks.after?.(request, res)
         await effectiveHooks.onComplete?.(request, res, undefined)
-        // After all retries, if throwOnHttpError is true and final response is error, throw HttpError
         if (
           effectiveThrowOnHttpError &&
           ((res.status >= 400 && res.status < 500 && res.status !== 429) ||
@@ -249,10 +295,8 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         }
         return res
       } catch (err: unknown) {
-        // If lastResponse is set (any status), return or throw as needed
         if (lastResponse) {
           const resp = lastResponse as Response
-          // Only throw if throwOnHttpError is true and final response is 4xx (not 429), 5xx, or 429
           if (
             effectiveThrowOnHttpError &&
             ((resp.status >= 400 && resp.status < 500 && resp.status !== 429) ||
@@ -267,7 +311,6 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
           }
           return resp
         }
-        // If the error is a known error type, re-throw it directly and call correct hook
         if (err instanceof TimeoutError) {
           await effectiveHooks.onTimeout?.(request)
           await effectiveHooks.onError?.(request, err)
@@ -285,7 +328,6 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
           await effectiveHooks.onComplete?.(request, undefined, err)
           throw err
         }
-        // Otherwise, wrap in RetryLimitError
         const retryErr = new RetryLimitError(
           typeof err === 'object' &&
           err &&
@@ -301,7 +343,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       }
     }
 
-    const promise = breaker
+    const actualPromise = breaker
       ? breaker.invoke(retryWithHooks).catch(async (err: unknown) => {
           if (err instanceof CircuitOpenError) {
             await effectiveHooks.onCircuitOpen?.(request)
@@ -315,22 +357,46 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         })
       : retryWithHooks()
 
-    const entry: PendingRequest = {
-      promise,
+    // If deduplication is enabled and dedupeKey is set, resolve/reject the in-flight promise
+    if (effectiveDedupe && dedupeKey && dedupeMap.has(dedupeKey)) {
+      const entry = dedupeMap.get(dedupeKey)
+      if (entry) {
+        actualPromise.then(
+          (result) => entry.resolve(result),
+          (error) => entry.reject(error)
+        )
+        // Replace the placeholder with the actual promise for future requests
+        dedupeMap.set(dedupeKey, {
+          promise: actualPromise,
+          resolve: entry.resolve,
+          reject: entry.reject,
+        })
+      }
+    }
+
+    const pendingEntry: PendingRequest = {
+      promise: actualPromise,
       request,
       controller,
     }
-    pendingRequests.push(entry)
+    pendingRequests.push(pendingEntry)
 
-    return promise.finally(() => {
-      const index = pendingRequests.indexOf(entry)
+    return actualPromise.finally(() => {
+      const index = pendingRequests.indexOf(pendingEntry)
       if (index > -1) {
         pendingRequests.splice(index, 1)
+      }
+      // Only delete dedupeMap entry if the promise is the same as the one in the map
+      if (
+        effectiveDedupe &&
+        dedupeKey &&
+        dedupeMap.get(dedupeKey)?.promise === actualPromise
+      ) {
+        dedupeMap.delete(dedupeKey)
       }
     })
   }
 
-  // Add pendingRequests property to the client function (read-only)
   Object.defineProperty(client, 'pendingRequests', {
     get() {
       return pendingRequests
@@ -339,7 +405,6 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     configurable: false,
   })
 
-  // Add abortAll method to the client function (read-only)
   Object.defineProperty(client, 'abortAll', {
     value: abortAll,
     writable: false,
@@ -347,7 +412,6 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     configurable: false,
   })
 
-  // Expose circuit breaker open state
   Object.defineProperty(client, 'circuitOpen', {
     get() {
       return breaker ? breaker.open : false

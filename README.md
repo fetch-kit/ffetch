@@ -20,6 +20,7 @@ ffetch can wrap any fetch-compatible implementation (native fetch, node-fetch, u
 - **Timeouts** – per-request or global
 - **Retries** – exponential backoff + jitter
 - **Circuit breaker** – automatic failure protection
+- **Deduplication** – automatic deduping of in-flight identical requests
 - **Hooks** – logging, auth, metrics, request/response transformation
 - **Pending requests** – real-time monitoring of active requests
 - **Per-request overrides** – customize behavior on a per-request basis
@@ -40,16 +41,23 @@ npm install @fetchkit/ffetch
 ```typescript
 import createClient from '@fetchkit/ffetch'
 
-// Create a client with timeout and retries
+// Create a client with timeout, retries, and deduplication
 const api = createClient({
   timeout: 5000,
   retries: 3,
+  dedupe: true, // Enable deduplication globally
   retryDelay: ({ attempt }) => 2 ** attempt * 100 + Math.random() * 100,
 })
 
 // Make requests
 const response = await api('https://api.example.com/users')
 const data = await response.json()
+
+// Deduplication example: these two requests will be deduped
+const p1 = api('https://api.example.com/data')
+const p2 = api('https://api.example.com/data')
+const [r1, r2] = await Promise.all([p1, p2])
+// Only one fetch will occur; both promises resolve to the same response
 ```
 
 ### Using a Custom fetchHandler (SSR, metaframeworks, or polyfills)
@@ -79,6 +87,8 @@ const response = await api('/api/data')
 const client = createClient({
   timeout: 10000,
   retries: 2,
+  dedupe: true,
+  dedupeHashFn: (params) => `${params.method}|${params.url}|${params.body}`,
   circuit: { threshold: 5, reset: 30000 },
   fetchHandler: fetch, // Use custom fetch if needed
   hooks: {
@@ -120,6 +130,7 @@ Native `fetch`'s controversial behavior of not throwing errors for HTTP error st
 | --------------------------------------------- | ------------------------------------------------------------------------- |
 | **[Complete Documentation](./docs/index.md)** | **Start here** - Documentation index and overview                         |
 | **[API Reference](./docs/api.md)**            | Complete API documentation and configuration options                      |
+| **[Deduplication](./docs/deduplication.md)**  | How deduplication works, config, custom hash, limitations                 |
 | **[Error Handling](./docs/errorhandling.md)** | Strategies for managing errors, including `throwOnHttpError`              |
 | **[Advanced Features](./docs/advanced.md)**   | Per-request overrides, pending requests, circuit breakers, custom errors  |
 | **[Hooks & Transformation](./docs/hooks.md)** | Lifecycle hooks, authentication, logging, request/response transformation |
@@ -157,6 +168,16 @@ npm install abort-controller-x
 </script>
 ```
 
+## Deduplication Limitations
+
+- Deduplication is **off** by default. Enable it via the `dedupe` option.
+- The default hash function is `dedupeRequestHash`, which handles common body types and skips deduplication for streams and FormData.
+- **Stream bodies** (`ReadableStream`, `FormData`): Deduplication is skipped for requests with these body types, as they cannot be reliably hashed or replayed.
+- **Non-idempotent requests**: Use deduplication with caution for non-idempotent methods (e.g., POST), as it may suppress multiple intended requests.
+- **Custom hash function**: Ensure your hash function uniquely identifies requests to avoid accidental deduplication.
+
+See [deduplication.md](./docs/deduplication.md) for full details.
+
 ## Fetch vs. Axios vs. `ffetch`
 
 | Feature              | Native Fetch              | Axios                | ffetch                                                                                 |
@@ -164,6 +185,7 @@ npm install abort-controller-x
 | Timeouts             | ❌ Manual AbortController | ✅ Built-in          | ✅ Built-in with fallbacks                                                             |
 | Retries              | ❌ Manual implementation  | ❌ Manual or plugins | ✅ Smart exponential backoff                                                           |
 | Circuit Breaker      | ❌ Not available          | ❌ Manual or plugins | ✅ Automatic failure protection                                                        |
+| Deduplication        | ❌ Not available          | ❌ Not available     | ✅ Automatic deduplication of in-flight identical requests                             |
 | Request Monitoring   | ❌ Manual tracking        | ❌ Manual tracking   | ✅ Built-in pending requests                                                           |
 | Error Types          | ❌ Generic errors         | ⚠️ HTTP errors only  | ✅ Specific error classes                                                              |
 | TypeScript           | ⚠️ Basic types            | ⚠️ Basic types       | ✅ Full type safety                                                                    |

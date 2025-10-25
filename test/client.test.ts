@@ -281,3 +281,43 @@ it('should throw if AbortSignal.any is missing and multiple signals are present'
   // Restore AbortSignal.any
   AbortSignal.any = origAny
 })
+
+it('dedupes identical requests and returns the same promise', async () => {
+  let fetchCalls = 0
+  const response = new Response('deduped', { status: 200 })
+  global.fetch = vi.fn().mockImplementation(async () => {
+    fetchCalls++
+    // Simulate network delay
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    return response
+  })
+
+  const client = createClient({ dedupe: true })
+  // Fire two requests with identical params
+  const p1 = client('https://dedupe-test.com', { method: 'GET' })
+  const p2 = client('https://dedupe-test.com', { method: 'GET' })
+  // Both should resolve to the same Response object
+  const [r1, r2] = await Promise.all([p1, p2])
+  expect(fetchCalls).toBe(1)
+  expect(r1.status).toBe(200)
+  expect(r2.status).toBe(200)
+  expect(await r1.text()).toBe('deduped')
+})
+
+it('dedupes and rejects identical requests together', async () => {
+  let fetchCalls = 0
+  global.fetch = vi.fn().mockImplementation(async () => {
+    fetchCalls++
+    // Simulate network error
+    throw new Error('network fail')
+  })
+
+  const client = createClient({ dedupe: true })
+  // Fire two requests with identical params
+  const p1 = client('https://dedupe-reject.com', { method: 'GET' })
+  const p2 = client('https://dedupe-reject.com', { method: 'GET' })
+  // Both should reject with the same error
+  await expect(p1).rejects.toThrow('network fail')
+  await expect(p2).rejects.toThrow('network fail')
+  expect(fetchCalls).toBe(1)
+})

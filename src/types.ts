@@ -1,4 +1,5 @@
 import type { Hooks } from './hooks'
+import type { DedupeHashParams } from './dedupeRequestHash'
 
 export interface RetryContext {
   attempt: number
@@ -19,15 +20,15 @@ export interface FFetchOptions {
     input: RequestInfo | URL,
     init?: RequestInit
   ) => Promise<Response>
+  dedupe?: boolean
+  dedupeHashFn?: (params: DedupeHashParams) => string | undefined
 }
 
 export type FFetch = {
   (input: RequestInfo | URL, init?: FFetchRequestInit): Promise<Response>
   pendingRequests: PendingRequest[]
   abortAll: () => void
-  /**
-   * True if the circuit breaker is open (blocking requests), false otherwise.
-   */
+  // True if the circuit breaker is open (blocking requests), false otherwise
   circuitOpen: boolean
 }
 
