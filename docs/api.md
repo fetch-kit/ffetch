@@ -209,6 +209,14 @@ const client = createClient({
 // Or use node-fetch/undici in Node.js
 import nodeFetch from 'node-fetch'
 const clientNode = createClient({ fetchHandler: nodeFetch })
+
+// Per-request fetchHandler override (useful for testing)
+const client = createClient({ retries: 0 })
+const mockFetch = () => Promise.resolve(
+  new Response(JSON.stringify({ test: 'data' }), { status: 200 })
+)
+await client('https://example.com', { fetchHandler: mockFetch }) // Uses mockFetch
+await client('https://example.com') // Uses global fetch
 ```
 
 ## Circuit Breaker Hooks
