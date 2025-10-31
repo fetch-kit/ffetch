@@ -73,4 +73,77 @@ describe('ffetch fetchHandler option', () => {
     expect(global.fetch).toHaveBeenCalled()
     global.fetch = originalFetch
   })
+
+  it('allows per-request fetchHandler override', async () => {
+    const clientFetchSpy = vi.fn(mockFetch)
+    const requestFetchSpy = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ from: 'request' }), { status: 200 })
+      )
+    )
+
+    const client = createClient({ fetchHandler: clientFetchSpy })
+    const res = await client('https://example.com', {
+      fetchHandler: requestFetchSpy,
+    })
+    const json = await res.json()
+
+    expect(clientFetchSpy).not.toHaveBeenCalled()
+    expect(requestFetchSpy).toHaveBeenCalled()
+    expect(json.from).toBe('request')
+  })
+
+  it('uses client fetchHandler when no per-request override is provided', async () => {
+    const clientFetchSpy = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ from: 'client' }), { status: 200 })
+      )
+    )
+
+    const client = createClient({ fetchHandler: clientFetchSpy })
+    const res = await client('https://example.com')
+    const json = await res.json()
+
+    expect(clientFetchSpy).toHaveBeenCalled()
+    expect(json.from).toBe('client')
+  })
+
+  it('supports per-request fetchHandler without client-level handler', async () => {
+    const requestFetchSpy = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ from: 'request-only' }), { status: 200 })
+      )
+    )
+
+    const client = createClient({ retries: 0 })
+    const res = await client('https://example.com', {
+      fetchHandler: requestFetchSpy,
+    })
+    const json = await res.json()
+
+    expect(requestFetchSpy).toHaveBeenCalled()
+    expect(json.from).toBe('request-only')
+  })
+
+  it('allows different fetchHandlers for different requests on same client', async () => {
+    const fetch1 = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ id: 1 }), { status: 200 }))
+    )
+    const fetch2 = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ id: 2 }), { status: 200 }))
+    )
+
+    const client = createClient({ retries: 0 })
+
+    const res1 = await client('https://test1.com', { fetchHandler: fetch1 })
+    const json1 = await res1.json()
+
+    const res2 = await client('https://test2.com', { fetchHandler: fetch2 })
+    const json2 = await res2.json()
+
+    expect(fetch1).toHaveBeenCalledTimes(1)
+    expect(fetch2).toHaveBeenCalledTimes(1)
+    expect(json1.id).toBe(1)
+    expect(json2.id).toBe(2)
+  })
 })

@@ -127,6 +127,8 @@ const data = await response.json()
 
 ### Injecting a Mock Fetch for Unit Tests
 
+You can provide a mock fetch handler at the client level or override it per-request:
+
 ```typescript
 import createClient from '@fetchkit/ffetch'
 
@@ -136,10 +138,28 @@ function mockFetch(url, options) {
   )
 }
 
+// Option 1: Client-level fetchHandler (all requests use this)
 const client = createClient({ fetchHandler: mockFetch })
 const response = await client('https://api.example.com/test')
 const data = await response.json()
 // data: { ok: true, url: 'https://api.example.com/test' }
+
+// Option 2: Per-request fetchHandler (useful for different mocks per test)
+const client2 = createClient({ retries: 0 })
+
+// First request with specific mock
+const mockUser = () => Promise.resolve(
+  new Response(JSON.stringify({ id: 1, name: 'Alice' }), { status: 200 })
+)
+const userResponse = await client2('/api/user', { fetchHandler: mockUser })
+// Returns: { id: 1, name: 'Alice' }
+
+// Second request with different mock
+const mockPosts = () => Promise.resolve(
+  new Response(JSON.stringify([{ id: 1, title: 'Hello' }]), { status: 200 })
+)
+const postsResponse = await client2('/api/posts', { fetchHandler: mockPosts })
+// Returns: [{ id: 1, title: 'Hello' }]
 ```
 
 ## Advanced Patterns
