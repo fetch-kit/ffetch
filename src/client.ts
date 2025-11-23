@@ -232,7 +232,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
               signal: combinedSignal,
             })
             try {
-              const handler = fetchHandler ?? fetch
+              const handler = init.fetchHandler ?? fetchHandler ?? fetch
               const response = await handler(reqWithSignal)
               lastResponse = response
               if (
