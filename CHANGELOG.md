@@ -1,5 +1,11 @@
 # ffetch
 
+## 4.2.0
+
+### Minor Changes
+
+- 0fa5ccf: - Allow fetchHandler to be overriden on a per-request basis
+
 ## 4.1.0
 
 ### Minor Changes
