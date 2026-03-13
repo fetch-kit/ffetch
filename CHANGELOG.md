@@ -1,5 +1,13 @@
 # ffetch
 
+## 4.3.0
+
+### Minor Changes
+
+- 3e3bf19: Added
+  - Optional dedupe map TTL cleanup
+  - Test coverage improvement
+
 ## 4.2.0
 
 ### Minor Changes
