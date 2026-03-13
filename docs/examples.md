@@ -148,16 +148,18 @@ const data = await response.json()
 const client2 = createClient({ retries: 0 })
 
 // First request with specific mock
-const mockUser = () => Promise.resolve(
-  new Response(JSON.stringify({ id: 1, name: 'Alice' }), { status: 200 })
-)
+const mockUser = () =>
+  Promise.resolve(
+    new Response(JSON.stringify({ id: 1, name: 'Alice' }), { status: 200 })
+  )
 const userResponse = await client2('/api/user', { fetchHandler: mockUser })
 // Returns: { id: 1, name: 'Alice' }
 
 // Second request with different mock
-const mockPosts = () => Promise.resolve(
-  new Response(JSON.stringify([{ id: 1, title: 'Hello' }]), { status: 200 })
-)
+const mockPosts = () =>
+  Promise.resolve(
+    new Response(JSON.stringify([{ id: 1, title: 'Hello' }]), { status: 200 })
+  )
 const postsResponse = await client2('/api/posts', { fetchHandler: mockPosts })
 // Returns: [{ id: 1, title: 'Hello' }]
 ```
@@ -572,6 +574,28 @@ window.addEventListener('beforeunload', () => poller.stopPolling())
 ```
 
 ### Caching with TTL
+
+### In-flight Deduplication with Dedupe Map TTL
+
+Use this when you want to dedupe concurrent identical requests and optionally evict stale in-flight dedupe keys:
+
+```typescript
+import createClient from '@fetchkit/ffetch'
+
+const client = createClient({
+  dedupe: true,
+  dedupeTTL: 30_000,
+  dedupeSweepInterval: 5_000,
+})
+
+const p1 = client('https://api.example.com/profile')
+const p2 = client('https://api.example.com/profile')
+
+// Same in-flight request is shared
+const [r1, r2] = await Promise.all([p1, p2])
+```
+
+> Note: `dedupeTTL` is not response caching TTL. It only evicts entries in the internal dedupe map.
 
 ```typescript
 import createClient, { type FFetch } from '@fetchkit/ffetch'

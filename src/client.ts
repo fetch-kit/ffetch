@@ -17,13 +17,39 @@ import {
 } from './error.js'
 
 export function createClient(opts: FFetchOptions = {}): FFetch {
-  // Track in-flight deduped requests and their resolvers
+  // Sweeper timer for dedupe TTL
+  let dedupeSweeper: ReturnType<typeof setInterval> | undefined
+
+  function startDedupeSweeper() {
+    if (dedupeSweeper || !dedupeTTL) return
+    dedupeSweeper = setInterval(() => {
+      const now = Date.now()
+      for (const [key, entry] of dedupeMap.entries()) {
+        if (now - entry.createdAt > dedupeTTL) {
+          dedupeMap.delete(key)
+        }
+      }
+      if (dedupeMap.size === 0 && dedupeSweeper) {
+        clearInterval(dedupeSweeper)
+        dedupeSweeper = undefined
+      }
+    }, dedupeSweepInterval)
+  }
+
+  function stopDedupeSweeperIfIdle() {
+    if (dedupeMap.size === 0 && dedupeSweeper) {
+      clearInterval(dedupeSweeper)
+      dedupeSweeper = undefined
+    }
+  }
+
   const dedupeMap = new Map<
     string,
     {
       promise: Promise<Response>
       resolve: (value: Response | PromiseLike<Response>) => void
       reject: (reason?: unknown) => void
+      createdAt: number
     }
   >()
   const {
@@ -36,6 +62,8 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     fetchHandler,
     dedupe = false,
     dedupeHashFn = dedupeRequestHash,
+    dedupeTTL,
+    dedupeSweepInterval = 5000,
   } = opts
 
   const breaker = clientDefaultCircuit
@@ -113,7 +141,10 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
           promise: inFlightPromise,
           resolve: resolveFn!,
           reject: rejectFn!,
+          createdAt: Date.now(),
         })
+        // Start sweeper if needed
+        if (dedupeTTL) startDedupeSweeper()
       }
     }
 
@@ -365,11 +396,12 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
           (result) => entry.resolve(result),
           (error) => entry.reject(error)
         )
-        // Replace the placeholder with the actual promise for future requests
+        // Replace the placeholder with the actual promise for future requests, preserve createdAt
         dedupeMap.set(dedupeKey, {
           promise: actualPromise,
           resolve: entry.resolve,
           reject: entry.reject,
+          createdAt: entry.createdAt,
         })
       }
     }
@@ -393,6 +425,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         dedupeMap.get(dedupeKey)?.promise === actualPromise
       ) {
         dedupeMap.delete(dedupeKey)
+        stopDedupeSweeperIfIdle()
       }
     })
   }

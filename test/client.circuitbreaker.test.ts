@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 
 import { createClient } from '../src/client.js'
 import { CircuitOpenError, RetryLimitError } from '../src/index.js'
+import { CircuitBreaker } from '../src/circuit.js'
 
 it('calls onCircuitOpen and onCircuitClose hooks appropriately', async () => {
   let openCalled = false
@@ -46,6 +47,41 @@ it('calls onCircuitOpen and onCircuitClose hooks appropriately', async () => {
 })
 
 describe('CircuitBreaker', () => {
+  it('recordResult returns false for success and triggers onCircuitClose with last success request', async () => {
+    const onCircuitClose = vi.fn()
+    const breaker = new CircuitBreaker(1, 10)
+    breaker.setHooks({ onCircuitClose })
+
+    const openReq = new Request('https://open.example.com')
+    const successReq = new Request('https://success.example.com')
+
+    // Open breaker with a counted failure
+    expect(breaker.recordResult(undefined, new Error('fail'), openReq)).toBe(
+      true
+    )
+    expect(breaker.open).toBe(true)
+
+    // Success should set lastSuccessRequest, close breaker, and return false
+    expect(
+      breaker.recordResult(
+        new Response('ok', { status: 200 }),
+        undefined,
+        successReq
+      )
+    ).toBe(false)
+    expect(breaker.open).toBe(false)
+    expect(onCircuitClose).toHaveBeenCalledTimes(1)
+    expect(onCircuitClose).toHaveBeenCalledWith(successReq)
+  })
+
+  it('recordResult success path works without request and still returns false', () => {
+    const breaker = new CircuitBreaker(2, 10)
+    expect(breaker.recordResult(new Response('ok', { status: 200 }))).toBe(
+      false
+    )
+    expect(breaker.open).toBe(false)
+  })
+
   it('exposes open state via getter', async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('fail'))
     const client = createClient({

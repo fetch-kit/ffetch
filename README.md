@@ -130,7 +130,7 @@ Native `fetch`'s controversial behavior of not throwing errors for HTTP error st
 | --------------------------------------------- | ------------------------------------------------------------------------- |
 | **[Complete Documentation](./docs/index.md)** | **Start here** - Documentation index and overview                         |
 | **[API Reference](./docs/api.md)**            | Complete API documentation and configuration options                      |
-| **[Deduplication](./docs/deduplication.md)**  | How deduplication works, config, custom hash, limitations                 |
+| **[Deduplication](./docs/deduplication.md)**  | How deduplication works, hash config, optional TTL cleanup, limitations   |
 | **[Error Handling](./docs/errorhandling.md)** | Strategies for managing errors, including `throwOnHttpError`              |
 | **[Advanced Features](./docs/advanced.md)**   | Per-request overrides, pending requests, circuit breakers, custom errors  |
 | **[Hooks & Transformation](./docs/hooks.md)** | Lifecycle hooks, authentication, logging, request/response transformation |
@@ -172,6 +172,7 @@ npm install abort-controller-x
 
 - Deduplication is **off** by default. Enable it via the `dedupe` option.
 - The default hash function is `dedupeRequestHash`, which handles common body types and skips deduplication for streams and FormData.
+- Optional stale-entry cleanup: `dedupeTTL` enables map-entry eviction, and `dedupeSweepInterval` controls how often eviction runs. TTL eviction only removes dedupe keys; it does not reject already in-flight promises.
 - **Stream bodies** (`ReadableStream`, `FormData`): Deduplication is skipped for requests with these body types, as they cannot be reliably hashed or replayed.
 - **Non-idempotent requests**: Use deduplication with caution for non-idempotent methods (e.g., POST), as it may suppress multiple intended requests.
 - **Custom hash function**: Ensure your hash function uniquely identifies requests to avoid accidental deduplication.

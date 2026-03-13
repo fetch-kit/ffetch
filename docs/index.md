@@ -65,23 +65,23 @@
 
 ### **I want to...**
 
-| Goal                           | Documentation                                                |
-| ------------------------------ | ------------------------------------------------------------ |
-| Get started quickly            | [README.md](../README.md)                                    |
-| Error handling                 | [errorhandling.md](./errorhandling.md)                       |
-| Deduplicate requests           | [deduplication.md](./deduplication.md)                       |
-| Migrate from native fetch      | [migration.md](./migration.md)                               |
-| See all configuration options  | [api.md](./api.md)                                           |
-| Handle errors gracefully       | [advanced.md](./advanced.md#custom-error-handling)           |
-| Add authentication to requests | [hooks.md](./hooks.md#authentication)                        |
-| Build a REST API client        | [examples.md](./examples.md#rest-api-client)                 |
-| Monitor active requests        | [advanced.md](./advanced.md#pending-requests-monitoring)     |
-| Implement retry logic          | [advanced.md](./advanced.md#retry-strategies-and-backoff)    |
-| Use with React/Vue/Svelte      | [compatibility.md](./compatibility.md#framework-integration) |
-| Debug connection issues        | [compatibility.md](./compatibility.md#troubleshooting)       |
-| Transform requests/responses   | [hooks.md](./hooks.md#requestresponse-transformation)        |
-| Handle rate limiting           | [examples.md](./examples.md#rate-limiting-and-backpressure)  |
-| Cache responses                | [examples.md](./examples.md#caching-with-ttl)                |
+| Goal                                             | Documentation                                                |
+| ------------------------------------------------ | ------------------------------------------------------------ |
+| Get started quickly                              | [README.md](../README.md)                                    |
+| Error handling                                   | [errorhandling.md](./errorhandling.md)                       |
+| Deduplicate requests (with optional TTL cleanup) | [deduplication.md](./deduplication.md)                       |
+| Migrate from native fetch                        | [migration.md](./migration.md)                               |
+| See all configuration options                    | [api.md](./api.md)                                           |
+| Handle errors gracefully                         | [advanced.md](./advanced.md#custom-error-handling)           |
+| Add authentication to requests                   | [hooks.md](./hooks.md#authentication)                        |
+| Build a REST API client                          | [examples.md](./examples.md#rest-api-client)                 |
+| Monitor active requests                          | [advanced.md](./advanced.md#pending-requests-monitoring)     |
+| Implement retry logic                            | [advanced.md](./advanced.md#retry-strategies-and-backoff)    |
+| Use with React/Vue/Svelte                        | [compatibility.md](./compatibility.md#framework-integration) |
+| Debug connection issues                          | [compatibility.md](./compatibility.md#troubleshooting)       |
+| Transform requests/responses                     | [hooks.md](./hooks.md#requestresponse-transformation)        |
+| Handle rate limiting                             | [examples.md](./examples.md#rate-limiting-and-backpressure)  |
+| Cache responses                                  | [examples.md](./examples.md#caching-with-ttl)                |
 
 ## **Key Concepts**
 

@@ -3,6 +3,200 @@ import { describe, it, expect, vi } from 'vitest'
 import { createClient } from '../src/client.js'
 import { defaultDelay } from '../src/retry.js'
 
+describe('client hooks and error handling', () => {
+  it('calls onTimeout and throws TimeoutError when timeout signal aborts', async () => {
+    let timeoutCalled = false
+    global.fetch = vi.fn().mockImplementation(async (input) => {
+      const signal = input instanceof Request ? input.signal : undefined
+      return await new Promise((_resolve, reject) => {
+        if (signal?.aborted) {
+          reject(new DOMException('aborted', 'AbortError'))
+          return
+        }
+        signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('aborted', 'AbortError')),
+          { once: true }
+        )
+      })
+    })
+    const client = createClient({
+      timeout: 10,
+      hooks: {
+        onTimeout: () => {
+          timeoutCalled = true
+        },
+      },
+    })
+    await expect(client('http://timeout-hook')).rejects.toThrow('timed out')
+    expect(timeoutCalled).toBe(true)
+  }, 1000)
+
+  it('calls onAbort and throws AbortError when user aborts', async () => {
+    let abortCalled = false
+    global.fetch = vi.fn().mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      return new Response('abort', { status: 200 })
+    })
+    const controller = new AbortController()
+    const client = createClient({
+      hooks: {
+        onAbort: () => {
+          abortCalled = true
+        },
+      },
+    })
+    controller.abort()
+    await expect(
+      client('http://abort-hook', { signal: controller.signal })
+    ).rejects.toThrow('aborted')
+    expect(abortCalled).toBe(true)
+  })
+
+  it('returns last response if error occurs after response', async () => {
+    global.fetch = vi.fn().mockImplementation(async () => {
+      return new Response('ok', { status: 200 })
+    })
+    const client = createClient({
+      throwOnHttpError: true,
+      hooks: {
+        transformResponse: async () => {
+          throw new Error('fail after response')
+        },
+      },
+    })
+    const res = await client('http://last-response')
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('ok')
+  })
+})
+
+describe('client branch coverage targets', () => {
+  it('passes undefined signal to dedupeHashFn when init.signal is null', async () => {
+    let seenSignal: AbortSignal | undefined = undefined
+    const client = createClient({
+      dedupe: true,
+      dedupeHashFn: (params) => {
+        seenSignal = params.signal
+        return undefined
+      },
+      fetchHandler: async () => new Response('ok', { status: 200 }),
+    })
+
+    await client('https://example.com/null-signal', {
+      signal: null as unknown as AbortSignal,
+    })
+    expect(seenSignal).toBeUndefined()
+  })
+
+  it('throws TimeoutError before fetch when timeout signal is already aborted', async () => {
+    const originalTimeout = AbortSignal.timeout
+    try {
+      AbortSignal.timeout = ((ms: number) => {
+        void ms
+        const c = new AbortController()
+        c.abort()
+        return c.signal
+      }) as typeof AbortSignal.timeout
+
+      const onTimeout = vi.fn()
+      global.fetch = vi.fn().mockImplementation(async () => {
+        throw new Error('fetch should not be called')
+      })
+
+      const client = createClient({ timeout: 10, hooks: { onTimeout } })
+      await expect(
+        client('https://example.com/pre-aborted-timeout')
+      ).rejects.toThrow('signal timed out')
+      expect(onTimeout).toHaveBeenCalled()
+      expect(global.fetch).not.toHaveBeenCalled()
+    } finally {
+      AbortSignal.timeout = originalTimeout
+    }
+  })
+
+  it('uses no-throwIfAborted fallback and throws AbortError when user aborts mid-check', async () => {
+    const originalThrowIfAborted = AbortSignal.prototype.throwIfAborted
+    const originalAny = AbortSignal.any
+    try {
+      // @ts-expect-error coverage: force fallback branch
+      AbortSignal.prototype.throwIfAborted = undefined
+
+      const userController = new AbortController()
+      AbortSignal.any = ((signals: AbortSignal[]) => {
+        void signals
+        return {
+          get aborted() {
+            userController.abort()
+            return true
+          },
+        } as AbortSignal
+      }) as typeof AbortSignal.any
+
+      global.fetch = vi.fn().mockImplementation(async () => {
+        throw new Error('fetch should not be called')
+      })
+
+      const client = createClient({ timeout: 60 })
+      await expect(
+        client('https://example.com/fallback-user-abort', {
+          signal: userController.signal,
+        })
+      ).rejects.toThrow('Request was aborted by user')
+      expect(global.fetch).not.toHaveBeenCalled()
+    } finally {
+      AbortSignal.any = originalAny
+      AbortSignal.prototype.throwIfAborted = originalThrowIfAborted
+    }
+  })
+
+  it('uses no-throwIfAborted fallback and throws TimeoutError when timeout aborts mid-check', async () => {
+    const originalThrowIfAborted = AbortSignal.prototype.throwIfAborted
+    const originalAny = AbortSignal.any
+    const originalTimeout = AbortSignal.timeout
+    try {
+      // @ts-expect-error coverage: force fallback branch
+      AbortSignal.prototype.throwIfAborted = undefined
+
+      let timeoutAborted = false
+      AbortSignal.timeout = ((ms: number) => {
+        void ms
+        return {
+          get aborted() {
+            return timeoutAborted
+          },
+        } as AbortSignal
+      }) as typeof AbortSignal.timeout
+
+      AbortSignal.any = ((signals: AbortSignal[]) => {
+        void signals
+        return {
+          get aborted() {
+            timeoutAborted = true
+            return true
+          },
+        } as AbortSignal
+      }) as typeof AbortSignal.any
+
+      const onTimeout = vi.fn()
+      global.fetch = vi.fn().mockImplementation(async () => {
+        throw new Error('fetch should not be called')
+      })
+
+      const client = createClient({ timeout: 10, hooks: { onTimeout } })
+      await expect(
+        client('https://example.com/fallback-timeout-abort')
+      ).rejects.toThrow('signal timed out')
+      expect(onTimeout).toHaveBeenCalled()
+      expect(global.fetch).not.toHaveBeenCalled()
+    } finally {
+      AbortSignal.timeout = originalTimeout
+      AbortSignal.any = originalAny
+      AbortSignal.prototype.throwIfAborted = originalThrowIfAborted
+    }
+  })
+})
+
 // Suppress unhandled promise rejections globally for this test file
 
 it('aborts after 50 ms', async () => {
@@ -320,4 +514,109 @@ it('dedupes and rejects identical requests together', async () => {
   await expect(p1).rejects.toThrow('network fail')
   await expect(p2).rejects.toThrow('network fail')
   expect(fetchCalls).toBe(1)
+})
+
+describe('dedupe cache TTL and sweeper', () => {
+  const delay = (ms: number) => new Promise((res) => setTimeout(res, ms))
+
+  it('should invalidate dedupe cache after TTL expires', async () => {
+    let callCount = 0
+    const client = createClient({
+      dedupe: true,
+      dedupeTTL: 50, // 50ms TTL
+      dedupeSweepInterval: 20,
+      fetchHandler: async (_input: RequestInfo | URL) => {
+        callCount++
+        await delay(10)
+        return new Response('ok', { status: 200 })
+      },
+    })
+
+    // First call, triggers fetch
+    const p1 = client('http://ttl-test')
+    // Second call, deduped
+    const p2 = client('http://ttl-test')
+    expect(p1).toStrictEqual(p2)
+    await p1
+    expect(callCount).toBe(1)
+
+    // Wait for TTL to expire
+    await delay(60)
+
+    // Third call, should not be deduped (cache expired)
+    const p3 = client('http://ttl-test')
+    await p3
+    expect(callCount).toBe(2)
+  })
+
+  it('should not reject deduped promises if TTL expires', async () => {
+    let resolveFetch: (v: Response) => void
+    const fetchPromise = new Promise<Response>((res) => {
+      resolveFetch = res
+    })
+    const client = createClient({
+      dedupe: true,
+      dedupeTTL: 30,
+      dedupeSweepInterval: 10,
+      fetchHandler: async () => {
+        return await fetchPromise
+      },
+    })
+
+    const p1 = client('http://ttl-promise')
+    const p2 = client('http://ttl-promise')
+    expect(p1).toStrictEqual(p2)
+
+    // Wait for TTL to expire
+    await delay(40)
+
+    // Promise should still be pending, not rejected
+    let settled = false
+    p1.then(() => {
+      settled = true
+    })
+    await delay(10)
+    expect(settled).toBe(false)
+
+    // Now resolve the fetch
+    resolveFetch!(new Response('done', { status: 200 }))
+    await delay(10) // allow promise to settle
+    expect(settled).toBe(true)
+  })
+
+  it('should clean up dedupeMap and stop sweeper when empty', async () => {
+    const client = createClient({
+      dedupe: true,
+      dedupeTTL: 20,
+      dedupeSweepInterval: 10,
+      fetchHandler: async () => {
+        return new Response('ok', { status: 200 })
+      },
+    })
+
+    await client('http://cleanup')
+    await delay(30) // Wait for TTL and sweeper
+
+    // @ts-expect-error: access private for test
+    expect(client._dedupeMap?.size ?? 0).toBe(0)
+    // @ts-expect-error: access private for test
+    expect(client._dedupeSweeper).toBeUndefined()
+  })
+
+  it('should dedupe even if dedupeTTL is 0 (no expiry)', async () => {
+    let callCount = 0
+    const client = createClient({
+      dedupe: true,
+      dedupeTTL: 0,
+      fetchHandler: async () => {
+        callCount++
+        return new Response('ok', { status: 200 })
+      },
+    })
+    const p1 = client('http://no-ttl')
+    const p2 = client('http://no-ttl')
+    expect(p1).toStrictEqual(p2)
+    await p1
+    expect(callCount).toBe(1)
+  })
 })

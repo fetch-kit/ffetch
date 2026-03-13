@@ -22,6 +22,8 @@ export interface FFetchOptions {
   ) => Promise<Response>
   dedupe?: boolean
   dedupeHashFn?: (params: DedupeHashParams) => string | undefined
+  dedupeTTL?: number
+  dedupeSweepInterval?: number
 }
 
 export type FFetch = {
