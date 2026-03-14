@@ -26,6 +26,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./plugins/dedupe": {
+      "types": "./dist/plugins/dedupe.d.ts",
+      "import": "./dist/plugins/dedupe.js",
+      "require": "./dist/plugins/dedupe.cjs"
+    },
+    "./plugins/circuit": {
+      "types": "./dist/plugins/circuit.d.ts",
+      "import": "./dist/plugins/circuit.js",
+      "require": "./dist/plugins/circuit.cjs"
     }
   },
   "files": [

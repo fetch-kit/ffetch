@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import createClient from '../src/index.js'
+import { createClient } from '../../src/index.js'
 
 describe('Pending Requests', () => {
   beforeEach(() => {

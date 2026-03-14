@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createClient } from '../src/client'
+import { createClient } from '../../src/client'
 
 // A mock fetch implementation for testing
 function mockFetch(

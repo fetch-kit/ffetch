@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { dedupeRequestHash, DedupeHashParams } from '../src/dedupeRequestHash'
+import {
+  dedupeRequestHash,
+  DedupeHashParams,
+} from '../../src/dedupeRequestHash'
 
 describe('dedupeRequestHash', () => {
   it('returns undefined for FormData body', () => {

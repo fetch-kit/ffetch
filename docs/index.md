@@ -13,11 +13,19 @@
   - Configuration parameters and defaults
   - TypeScript interfaces and types
 
+### **Plugin Architecture**
+
+- **[plugins.md](./plugins.md)** - Plugin lifecycle, ordering, custom plugin authoring
+  - Built-in feature plugins (`dedupe`, `circuit`)
+  - Writing and registering custom plugins
+  - Public plugin types and extension patterns
+
 ### **Getting Started**
 
 - **[migration.md](./migration.md)** - Migration guide from native fetch to ffetch
   - Drop-in replacement patterns
   - Error handling differences
+  - v4 -> v5 plugin migration (`dedupe`/`circuit` flags -> plugins)
   - New capabilities and features
   - TypeScript migration tips
 
@@ -58,8 +66,9 @@
 1. **Start with the [README](../README.md)** for installation and basic usage
 2. **Check [compatibility.md](./compatibility.md)** to ensure your environment is supported
 3. **Read [api.md](./api.md)** for complete configuration options
-4. **Explore [examples.md](./examples.md)** for patterns that match your use case
-5. **Dive into [advanced.md](./advanced.md)** and [hooks.md](./hooks.md)\*\* for powerful features
+4. **Read [plugins.md](./plugins.md)** to understand plugin architecture and custom extensions
+5. **Explore [examples.md](./examples.md)** for patterns that match your use case
+6. **Dive into [advanced.md](./advanced.md)** and [hooks.md](./hooks.md)\*\* for powerful features
 
 ## **Finding What You Need**
 
@@ -71,6 +80,8 @@
 | Error handling                                   | [errorhandling.md](./errorhandling.md)                       |
 | Deduplicate requests (with optional TTL cleanup) | [deduplication.md](./deduplication.md)                       |
 | Migrate from native fetch                        | [migration.md](./migration.md)                               |
+| Understand plugin architecture                   | [plugins.md](./plugins.md)                                   |
+| Write a custom plugin                            | [plugins.md](./plugins.md#writing-a-custom-plugin)           |
 | See all configuration options                    | [api.md](./api.md)                                           |
 | Handle errors gracefully                         | [advanced.md](./advanced.md#custom-error-handling)           |
 | Add authentication to requests                   | [hooks.md](./hooks.md#authentication)                        |
@@ -89,7 +100,7 @@
 
 - **Timeouts**: Per-request or global timeout configuration
 - **Retries**: Exponential backoff with jitter and custom retry logic
-- **Circuit Breaker**: Automatic failure protection and recovery
+- **Plugin-based optional features**: Circuit breaker, dedupe, and third-party plugins
 - **Hooks**: Lifecycle events for logging, auth, and transformation
 - **Pending Requests**: Real-time monitoring of active requests
 - **Custom fetch wrapping**: Pluggable fetch implementation for SSR, node-fetch, undici, and framework-provided fetch
@@ -113,7 +124,7 @@
 ### **Basic HTTP Client**
 
 ```typescript
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
 
 const api = createClient({
   timeout: 5000,

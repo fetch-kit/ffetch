@@ -22,7 +22,7 @@ it('retries on 400 if shouldRetry returns true', async () => {
   })
   const f = createClient({
     retries: 1,
-    shouldRetry: (ctx) => ctx.response?.status === 400,
+    shouldRetry: (ctx: RetryContext) => ctx.response?.status === 400,
   })
   const res = await f('https://test.com')
   expect(res.status).toBe(200)
@@ -68,7 +68,7 @@ it('throws CircuitOpenError if circuit opens due to repeated 5xx and throwOnHttp
   const f = createClient({
     throwOnHttpError: true,
     retries: 0,
-    circuit: { threshold: 2, reset: 100 },
+    plugins: [circuitPlugin({ threshold: 2, reset: 100 })],
   })
   // First two requests fail, opening the circuit
   await expect(f('https://test.com')).rejects.toThrow(HttpError)
@@ -130,17 +130,20 @@ it('throws AbortError or TimeoutError, not HttpError, if aborted/timed out and t
   const f2 = createClient({ throwOnHttpError: true, timeout: 10 })
   await expect(f2('https://test.com')).rejects.toThrow(TimeoutError)
 })
-import { HttpError } from '../src/error.js'
+import { HttpError } from '../../src/error.js'
 // Suppress unhandled promise rejections globally for this test file
 
 import { describe, it, expect, vi } from 'vitest'
-import createClient, {
+import {
+  createClient,
   TimeoutError,
   CircuitOpenError,
   AbortError,
   RetryLimitError,
   NetworkError,
-} from '../src/index.js'
+} from '../../src/index.js'
+import { circuitPlugin } from '../../src/plugins/circuit.js'
+import type { RetryContext } from '../../src/types.js'
 
 describe('Integration: Custom Errors', () => {
   it('throws HttpError on 4xx/5xx if throwOnHttpError is true (per-request)', async () => {
@@ -216,9 +219,9 @@ describe('Integration: Custom Errors', () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('fail'))
     const f = createClient({
       retries: 0,
-      circuit: { threshold: 1, reset: 100 },
+      plugins: [circuitPlugin({ threshold: 1, reset: 100 })],
     })
-    await expect(f('https://example.com')).rejects.toThrow('fail')
+    await expect(f('https://example.com')).rejects.toThrow(CircuitOpenError)
     await expect(f('https://example.com')).rejects.toThrow(CircuitOpenError)
   })
 
@@ -346,14 +349,14 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('fail'))
     const f = createClient({
       retries: 0,
-      circuit: { threshold: 2, reset: 100 },
+      plugins: [circuitPlugin({ threshold: 2, reset: 100 })],
     })
     await expect(f('https://example.com')).rejects.toThrow('fail')
     await expect(f('https://example.com')).rejects.toThrow(CircuitOpenError)
     await expect(f('https://example.com')).rejects.toThrow(CircuitOpenError)
     // Wait for reset
     await new Promise((r) => setTimeout(r, 120))
-    await expect(f('https://example.com')).rejects.toThrow('fail')
+    await expect(f('https://example.com')).rejects.toThrow(CircuitOpenError)
   })
 
   it('Error hooks receive correct error instance', async () => {

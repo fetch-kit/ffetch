@@ -4,82 +4,74 @@ import type {
   FFetchRequestInit,
   PendingRequest,
 } from './types.js'
-import { dedupeRequestHash } from './dedupeRequestHash.js'
 import { retry, defaultDelay } from './retry.js'
 import { shouldRetry as defaultShouldRetry } from './should-retry.js'
-import { CircuitBreaker } from './circuit.js'
+import {
+  type PluginDispatch,
+  type PluginRequestContext,
+  type PluginExtensions,
+  type ClientPlugin,
+  type PluginExtensionBase,
+} from './plugins.js'
 import {
   TimeoutError,
-  CircuitOpenError,
   AbortError,
   RetryLimitError,
   NetworkError,
 } from './error.js'
 
-export function createClient(opts: FFetchOptions = {}): FFetch {
-  // Sweeper timer for dedupe TTL
-  let dedupeSweeper: ReturnType<typeof setInterval> | undefined
-
-  function startDedupeSweeper() {
-    if (dedupeSweeper || !dedupeTTL) return
-    dedupeSweeper = setInterval(() => {
-      const now = Date.now()
-      for (const [key, entry] of dedupeMap.entries()) {
-        if (now - entry.createdAt > dedupeTTL) {
-          dedupeMap.delete(key)
-        }
-      }
-      if (dedupeMap.size === 0 && dedupeSweeper) {
-        clearInterval(dedupeSweeper)
-        dedupeSweeper = undefined
-      }
-    }, dedupeSweepInterval)
-  }
-
-  function stopDedupeSweeperIfIdle() {
-    if (dedupeMap.size === 0 && dedupeSweeper) {
-      clearInterval(dedupeSweeper)
-      dedupeSweeper = undefined
-    }
-  }
-
-  const dedupeMap = new Map<
-    string,
-    {
-      promise: Promise<Response>
-      resolve: (value: Response | PromiseLike<Response>) => void
-      reject: (reason?: unknown) => void
-      createdAt: number
-    }
-  >()
+export function createClient<
+  TPlugins extends
+    readonly ClientPlugin<PluginExtensionBase>[] = readonly ClientPlugin<PluginExtensionBase>[],
+>(
+  opts: FFetchOptions<TPlugins> = {} as FFetchOptions<TPlugins>
+): FFetch<PluginExtensions<TPlugins>> {
   const {
     timeout: clientDefaultTimeout = 5_000,
     retries: clientDefaultRetries = 0,
     retryDelay: clientDefaultRetryDelay = defaultDelay,
     shouldRetry: clientDefaultShouldRetry = defaultShouldRetry,
     hooks: clientDefaultHooks = {},
-    circuit: clientDefaultCircuit,
     fetchHandler,
-    dedupe = false,
-    dedupeHashFn = dedupeRequestHash,
-    dedupeTTL,
-    dedupeSweepInterval = 5000,
+    plugins: inputPlugins = [] as unknown as TPlugins,
   } = opts
 
-  const breaker = clientDefaultCircuit
-    ? new CircuitBreaker(
-        clientDefaultCircuit.threshold,
-        clientDefaultCircuit.reset
-      )
-    : null
+  const extensionDescriptors: PropertyDescriptorMap = Object.create(null)
 
-  if (
-    breaker &&
-    (clientDefaultHooks.onCircuitClose || clientDefaultHooks.onCircuitOpen)
-  ) {
-    breaker.setHooks({
-      onCircuitClose: clientDefaultHooks.onCircuitClose,
-      onCircuitOpen: clientDefaultHooks.onCircuitOpen,
+  const plugins = inputPlugins
+    .map((plugin, index) => ({ plugin, index }))
+    .sort((a, b) => {
+      const aOrder = a.plugin.order ?? 0
+      const bOrder = b.plugin.order ?? 0
+      if (aOrder !== bOrder) return aOrder - bOrder
+      return a.index - b.index
+    })
+    .map((entry) => entry.plugin)
+
+  for (const plugin of plugins) {
+    plugin.setup?.({
+      defineExtension: (key, descriptor) => {
+        const propertyKey = key as PropertyKey
+        if (propertyKey in extensionDescriptors) {
+          throw new Error(
+            `Plugin extension collision for property "${String(propertyKey)}"`
+          )
+        }
+        if ('get' in descriptor) {
+          extensionDescriptors[propertyKey] = {
+            get: descriptor.get,
+            enumerable: descriptor.enumerable ?? true,
+            configurable: false,
+          }
+          return
+        }
+        extensionDescriptors[propertyKey] = {
+          value: descriptor.value,
+          writable: false,
+          enumerable: descriptor.enumerable ?? true,
+          configurable: false,
+        }
+      },
     })
   }
 
@@ -96,57 +88,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     input: RequestInfo | URL,
     init: FFetchRequestInit = {}
   ) => {
-    // Deduplication logic
-    const effectiveDedupe =
-      typeof init.dedupe !== 'undefined' ? init.dedupe : dedupe
-    const effectiveDedupeHashFn = init.dedupeHashFn || dedupeHashFn
-    let dedupeKey: string | undefined
-
     let request = new Request(input, init)
-    if (effectiveDedupe) {
-      dedupeKey = effectiveDedupeHashFn({
-        method: request.method,
-        url: request.url,
-        body: init.body ?? null,
-        headers: request.headers,
-        signal:
-          init.signal === undefined || init.signal === null
-            ? undefined
-            : init.signal,
-        requestInit: init,
-        request,
-      })
-      if (dedupeKey) {
-        if (dedupeMap.has(dedupeKey)) {
-          return dedupeMap.get(dedupeKey)!.promise
-        }
-        let settled = false
-        let resolveFn: (value: Response | PromiseLike<Response>) => void
-        let rejectFn: (reason?: unknown) => void
-        const inFlightPromise = new Promise<Response>((resolve, reject) => {
-          resolveFn = (value) => {
-            if (!settled) {
-              settled = true
-              resolve(value)
-            }
-          }
-          rejectFn = (reason) => {
-            if (!settled) {
-              settled = true
-              reject(reason)
-            }
-          }
-        })
-        dedupeMap.set(dedupeKey, {
-          promise: inFlightPromise,
-          resolve: resolveFn!,
-          reject: rejectFn!,
-          createdAt: Date.now(),
-        })
-        // Start sweeper if needed
-        if (dedupeTTL) startDedupeSweeper()
-      }
-    }
 
     // Merge hooks: per-request hooks override client hooks, but fallback to client hooks
     const effectiveHooks = { ...clientDefaultHooks, ...(init.hooks || {}) }
@@ -154,6 +96,45 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       request = await effectiveHooks.transformRequest(request)
     }
     await effectiveHooks.before?.(request)
+
+    // Determine retry config (per-request overrides client default)
+    const effectiveRetries = init.retries ?? clientDefaultRetries
+    const effectiveRetryDelay =
+      typeof init.retryDelay !== 'undefined'
+        ? init.retryDelay
+        : clientDefaultRetryDelay
+    const effectiveShouldRetry = init.shouldRetry ?? clientDefaultShouldRetry
+
+    // AbortSignal.timeout/any logic
+    const effectiveTimeout = init.timeout ?? clientDefaultTimeout
+    const userSignal = init.signal
+    const transformedSignal = request.signal
+
+    const pluginContext: PluginRequestContext = {
+      request,
+      init,
+      state: Object.create(null),
+      metadata: {
+        startedAt: Date.now(),
+        timeoutMs: effectiveTimeout,
+        signals: {
+          user:
+            userSignal === undefined || userSignal === null
+              ? undefined
+              : userSignal,
+          transformed: transformedSignal,
+        },
+        retry: {
+          configuredRetries: effectiveRetries,
+          configuredDelay: effectiveRetryDelay,
+          attempt: 0,
+        },
+      },
+    }
+
+    for (const plugin of plugins) {
+      await plugin.preRequest?.(pluginContext)
+    }
 
     // Determine throwOnHttpError (per-request overrides client default)
     const effectiveThrowOnHttpError =
@@ -176,16 +157,13 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       return controller.signal
     }
 
-    // AbortSignal.timeout/any logic
-    const effectiveTimeout = init.timeout ?? clientDefaultTimeout
-    const userSignal = init.signal
-    const transformedSignal = request.signal
     let timeoutSignal: AbortSignal | undefined = undefined
     let combinedSignal: AbortSignal | undefined = undefined
     let controller: AbortController | undefined = undefined
 
     if (effectiveTimeout > 0) {
       timeoutSignal = createTimeoutSignal(effectiveTimeout)
+      pluginContext.metadata.signals.timeout = timeoutSignal
     }
 
     const signals: AbortSignal[] = []
@@ -207,19 +185,17 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       combinedSignal = AbortSignal.any(signals)
       controller = new AbortController()
     }
+    pluginContext.metadata.signals.combined = combinedSignal
 
     const retryWithHooks = async () => {
-      const effectiveRetries = init.retries ?? clientDefaultRetries
-      const effectiveRetryDelay =
-        typeof init.retryDelay !== 'undefined'
-          ? init.retryDelay
-          : clientDefaultRetryDelay
-      const effectiveShouldRetry = init.shouldRetry ?? clientDefaultShouldRetry
-
       let attempt = 0
       const shouldRetryWithHook = (ctx: import('./types').RetryContext) => {
         attempt = ctx.attempt
+        pluginContext.metadata.retry.attempt = attempt
+        pluginContext.metadata.retry.lastError = ctx.error
+        pluginContext.metadata.retry.lastResponse = ctx.response
         const retrying = effectiveShouldRetry(ctx)
+        pluginContext.metadata.retry.shouldRetryResult = retrying
         if (retrying && attempt <= effectiveRetries) {
           effectiveHooks.onRetry?.(
             request,
@@ -266,15 +242,10 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
               const handler = init.fetchHandler ?? fetchHandler ?? fetch
               const response = await handler(reqWithSignal)
               lastResponse = response
-              if (
-                breaker &&
-                (response.status >= 500 || response.status === 429)
-              ) {
-                breaker.recordResult(response, undefined, request)
-              }
+              pluginContext.metadata.retry.lastResponse = response
               return response
             } catch (err) {
-              if (breaker) breaker.recordResult(undefined, err, request)
+              pluginContext.metadata.retry.lastError = err
               if (err instanceof DOMException && err.name === 'AbortError') {
                 if (
                   timeoutSignal?.aborted &&
@@ -326,6 +297,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
         }
         return res
       } catch (err: unknown) {
+        pluginContext.metadata.retry.lastError = err
         if (lastResponse) {
           const resp = lastResponse as Response
           if (
@@ -374,37 +346,29 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
       }
     }
 
-    const actualPromise = breaker
-      ? breaker.invoke(retryWithHooks).catch(async (err: unknown) => {
-          if (err instanceof CircuitOpenError) {
-            await effectiveHooks.onCircuitOpen?.(request)
-            await effectiveHooks.onError?.(request, err)
-            await effectiveHooks.onComplete?.(request, undefined, err)
-          } else {
-            await effectiveHooks.onError?.(request, err)
-            await effectiveHooks.onComplete?.(request, undefined, err)
-          }
-          throw err
-        })
-      : retryWithHooks()
+    const baseDispatch: PluginDispatch = async () => retryWithHooks()
 
-    // If deduplication is enabled and dedupeKey is set, resolve/reject the in-flight promise
-    if (effectiveDedupe && dedupeKey && dedupeMap.has(dedupeKey)) {
-      const entry = dedupeMap.get(dedupeKey)
-      if (entry) {
-        actualPromise.then(
-          (result) => entry.resolve(result),
-          (error) => entry.reject(error)
-        )
-        // Replace the placeholder with the actual promise for future requests, preserve createdAt
-        dedupeMap.set(dedupeKey, {
-          promise: actualPromise,
-          resolve: entry.resolve,
-          reject: entry.reject,
-          createdAt: entry.createdAt,
-        })
+    let dispatch = baseDispatch
+    for (let i = plugins.length - 1; i >= 0; i--) {
+      const plugin = plugins[i]
+      if (plugin.wrapDispatch) {
+        dispatch = plugin.wrapDispatch(dispatch)
       }
     }
+
+    const actualPromise = dispatch(pluginContext)
+      .then(async (response) => {
+        for (const plugin of plugins) {
+          await plugin.onSuccess?.(pluginContext, response)
+        }
+        return response
+      })
+      .catch(async (err: unknown) => {
+        for (const plugin of plugins) {
+          await plugin.onError?.(pluginContext, err)
+        }
+        throw err
+      })
 
     const pendingEntry: PendingRequest = {
       promise: actualPromise,
@@ -413,19 +377,14 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     }
     pendingRequests.push(pendingEntry)
 
-    return actualPromise.finally(() => {
+    return actualPromise.finally(async () => {
+      for (const plugin of plugins) {
+        await plugin.onFinally?.(pluginContext)
+      }
+
       const index = pendingRequests.indexOf(pendingEntry)
       if (index > -1) {
         pendingRequests.splice(index, 1)
-      }
-      // Only delete dedupeMap entry if the promise is the same as the one in the map
-      if (
-        effectiveDedupe &&
-        dedupeKey &&
-        dedupeMap.get(dedupeKey)?.promise === actualPromise
-      ) {
-        dedupeMap.delete(dedupeKey)
-        stopDedupeSweeperIfIdle()
       }
     })
   }
@@ -445,12 +404,7 @@ export function createClient(opts: FFetchOptions = {}): FFetch {
     configurable: false,
   })
 
-  Object.defineProperty(client, 'circuitOpen', {
-    get() {
-      return breaker ? breaker.open : false
-    },
-    enumerable: true,
-  })
+  Object.defineProperties(client, extensionDescriptors)
 
-  return client as FFetch
+  return client as FFetch<PluginExtensions<TPlugins>>
 }

@@ -1,8 +1,8 @@
 // Suppress unhandled promise rejections globally for this test file
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import type { FFetchRequestInit } from '../src/types.js'
-import { createClient } from '../src/client.js'
+import type { FFetchRequestInit } from '../../src/types.js'
+import { createClient } from '../../src/client.js'
 
 function mockFetchImpl(
   responseOrImpl: Response | ((..._args: unknown[]) => unknown),

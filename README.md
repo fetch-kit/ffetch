@@ -15,18 +15,21 @@
 
 ffetch can wrap any fetch-compatible implementation (native fetch, node-fetch, undici, or framework-provided fetch), making it flexible for SSR, edge, and custom environments.
 
+ffetch uses a plugin architecture for optional features, so you only include what you need.
+
 **Key Features:**
 
 - **Timeouts** – per-request or global
 - **Retries** – exponential backoff + jitter
-- **Circuit breaker** – automatic failure protection
-- **Deduplication** – automatic deduping of in-flight identical requests
+- **Plugin architecture** – extensible lifecycle-based plugins for optional behavior
 - **Hooks** – logging, auth, metrics, request/response transformation
 - **Pending requests** – real-time monitoring of active requests
 - **Per-request overrides** – customize behavior on a per-request basis
 - **Universal** – Node.js, Browser, Cloudflare Workers, React Native
 - **Zero runtime deps** – ships as dual ESM/CJS
 - **Configurable error handling** – custom error types and `throwOnHttpError` flag to throw on HTTP errors
+- **Circuit breaker plugin (optional, prebuilt)** – automatic failure protection
+- **Deduplication plugin (optional, prebuilt)** – automatic deduping of in-flight identical requests
 
 ## Quick Start
 
@@ -39,13 +42,14 @@ npm install @fetchkit/ffetch
 ### Basic Usage
 
 ```typescript
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
+import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
 
-// Create a client with timeout, retries, and deduplication
+// Create a client with timeout, retries, and deduplication plugin
 const api = createClient({
   timeout: 5000,
   retries: 3,
-  dedupe: true, // Enable deduplication globally
+  plugins: [dedupePlugin()],
   retryDelay: ({ attempt }) => 2 ** attempt * 100 + Math.random() * 100,
 })
 
@@ -64,7 +68,7 @@ const [r1, r2] = await Promise.all([p1, p2])
 
 ```typescript
 // Example: SvelteKit, Next.js, Nuxt, or node-fetch
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
 
 // Pass your framework's fetch implementation
 const api = createClient({
@@ -84,19 +88,31 @@ const response = await api('/api/data')
 
 ```typescript
 // Production-ready client with error handling and monitoring
+import { createClient } from '@fetchkit/ffetch'
+import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
+import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+
 const client = createClient({
   timeout: 10000,
   retries: 2,
-  dedupe: true,
-  dedupeHashFn: (params) => `${params.method}|${params.url}|${params.body}`,
-  circuit: { threshold: 5, reset: 30000 },
   fetchHandler: fetch, // Use custom fetch if needed
+  plugins: [
+    dedupePlugin({
+      hashFn: (params) => `${params.method}|${params.url}|${params.body}`,
+      ttl: 30_000,
+      sweepInterval: 5_000,
+    }),
+    circuitPlugin({
+      threshold: 5,
+      reset: 30_000,
+      onCircuitOpen: (req) => console.warn('Circuit opened due to:', req.url),
+      onCircuitClose: (req) => console.info('Circuit closed after:', req.url),
+    }),
+  ],
   hooks: {
     before: async (req) => console.log('→', req.url),
     after: async (req, res) => console.log('←', res.status),
     onError: async (req, err) => console.error('Error:', err.message),
-    onCircuitOpen: (req) => console.warn('Circuit opened due to:', req.url),
-    onCircuitClose: (req) => console.info('Circuit closed after:', req.url),
   },
 })
 
@@ -130,6 +146,7 @@ Native `fetch`'s controversial behavior of not throwing errors for HTTP error st
 | --------------------------------------------- | ------------------------------------------------------------------------- |
 | **[Complete Documentation](./docs/index.md)** | **Start here** - Documentation index and overview                         |
 | **[API Reference](./docs/api.md)**            | Complete API documentation and configuration options                      |
+| **[Plugin Architecture](./docs/plugins.md)**  | Plugin lifecycle, custom plugin authoring, and integration patterns       |
 | **[Deduplication](./docs/deduplication.md)**  | How deduplication works, hash config, optional TTL cleanup, limitations   |
 | **[Error Handling](./docs/errorhandling.md)** | Strategies for managing errors, including `throwOnHttpError`              |
 | **[Advanced Features](./docs/advanced.md)**   | Per-request overrides, pending requests, circuit breakers, custom errors  |
@@ -139,12 +156,12 @@ Native `fetch`'s controversial behavior of not throwing errors for HTTP error st
 
 ## Environment Requirements
 
-`ffetch` requires modern AbortSignal APIs:
+`ffetch` works best with native `AbortSignal.any` support:
 
-- **Node.js 20.6+** (for AbortSignal.any)
-- **Modern browsers** (Chrome 117+, Firefox 117+, Safari 17+, Edge 117+)
+- **Node.js 20.6+** (native `AbortSignal.any`)
+- **Modern browsers with `AbortSignal.any`** (for example: Chrome 117+, Firefox 117+, Safari 17+, Edge 117+)
 
-If your environment does not support `AbortSignal.any` (Node.js < 20.6, older browsers), you **must install a polyfill** before using ffetch. See the [compatibility guide](./docs/compatibility.md) for instructions.
+If your environment does not support `AbortSignal.any` (Node.js < 20.6, older browsers), you can still use ffetch by installing an `AbortSignal.any` polyfill. `AbortSignal.timeout` is optional because ffetch includes an internal timeout fallback. See the [compatibility guide](./docs/compatibility.md) for instructions.
 
 **Custom fetch support:**
 You can pass any fetch-compatible implementation (native fetch, node-fetch, undici, SvelteKit, Next.js, Nuxt, or a polyfill) via the `fetchHandler` option. This makes ffetch fully compatible with SSR, edge, metaframework environments, custom backends, and test runners.
@@ -161,7 +178,7 @@ npm install abort-controller-x
 
 ```html
 <script type="module">
-  import createClient from 'https://unpkg.com/@fetchkit/ffetch/dist/index.min.js'
+  import { createClient } from 'https://unpkg.com/@fetchkit/ffetch/dist/index.min.js'
 
   const api = createClient({ timeout: 5000 })
   const data = await api('/api/data').then((r) => r.json())
@@ -170,9 +187,9 @@ npm install abort-controller-x
 
 ## Deduplication Limitations
 
-- Deduplication is **off** by default. Enable it via the `dedupe` option.
+- Deduplication is **off** by default. Enable it via `plugins: [dedupePlugin()]`.
 - The default hash function is `dedupeRequestHash`, which handles common body types and skips deduplication for streams and FormData.
-- Optional stale-entry cleanup: `dedupeTTL` enables map-entry eviction, and `dedupeSweepInterval` controls how often eviction runs. TTL eviction only removes dedupe keys; it does not reject already in-flight promises.
+- Optional stale-entry cleanup: `dedupePlugin({ ttl, sweepInterval })` enables map-entry eviction. TTL eviction only removes dedupe keys; it does not reject already in-flight promises.
 - **Stream bodies** (`ReadableStream`, `FormData`): Deduplication is skipped for requests with these body types, as they cannot be reliably hashed or replayed.
 - **Non-idempotent requests**: Use deduplication with caution for non-idempotent methods (e.g., POST), as it may suppress multiple intended requests.
 - **Custom hash function**: Ensure your hash function uniquely identifies requests to avoid accidental deduplication.
@@ -185,6 +202,7 @@ See [deduplication.md](./docs/deduplication.md) for full details.
 | -------------------- | ------------------------- | -------------------- | -------------------------------------------------------------------------------------- |
 | Timeouts             | ❌ Manual AbortController | ✅ Built-in          | ✅ Built-in with fallbacks                                                             |
 | Retries              | ❌ Manual implementation  | ❌ Manual or plugins | ✅ Smart exponential backoff                                                           |
+| Plugin Architecture  | ❌ Not available          | ⚠️ Interceptors only | ✅ First-class plugin pipeline (optional built-in + custom plugins)                    |
 | Circuit Breaker      | ❌ Not available          | ❌ Manual or plugins | ✅ Automatic failure protection                                                        |
 | Deduplication        | ❌ Not available          | ❌ Not available     | ✅ Automatic deduplication of in-flight identical requests                             |
 | Request Monitoring   | ❌ Manual tracking        | ❌ Manual tracking   | ✅ Built-in pending requests                                                           |

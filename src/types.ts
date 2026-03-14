@@ -1,5 +1,5 @@
 import type { Hooks } from './hooks'
-import type { DedupeHashParams } from './dedupeRequestHash'
+import type { ClientPlugin, PluginExtensionBase } from './plugins'
 
 export interface RetryContext {
   attempt: number
@@ -8,33 +8,35 @@ export interface RetryContext {
   error?: unknown
 }
 
-export interface FFetchOptions {
+export interface CoreClientOptions {
   timeout?: number
   retries?: number
   retryDelay?: number | ((ctx: RetryContext) => number)
   shouldRetry?: (ctx: RetryContext) => boolean
   throwOnHttpError?: boolean
-  circuit?: { threshold: number; reset: number }
   hooks?: Hooks
   fetchHandler?: (
     input: RequestInfo | URL,
     init?: RequestInit
   ) => Promise<Response>
-  dedupe?: boolean
-  dedupeHashFn?: (params: DedupeHashParams) => string | undefined
-  dedupeTTL?: number
-  dedupeSweepInterval?: number
 }
 
-export type FFetch = {
+export interface FFetchOptions<
+  TPlugins extends
+    readonly ClientPlugin<PluginExtensionBase>[] = readonly ClientPlugin<PluginExtensionBase>[],
+> extends CoreClientOptions {
+  plugins?: TPlugins
+}
+
+export type FFetchRequestOptions = CoreClientOptions
+
+export type FFetch<TExtensions extends object = Record<never, never>> = {
   (input: RequestInfo | URL, init?: FFetchRequestInit): Promise<Response>
   pendingRequests: PendingRequest[]
   abortAll: () => void
-  // True if the circuit breaker is open (blocking requests), false otherwise
-  circuitOpen: boolean
-}
+} & TExtensions
 
-export interface FFetchRequestInit extends RequestInit, FFetchOptions {}
+export interface FFetchRequestInit extends RequestInit, FFetchRequestOptions {}
 
 export type PendingRequest = {
   promise: Promise<Response>
