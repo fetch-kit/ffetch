@@ -209,12 +209,17 @@ This is useful for:
 ### Configuration
 
 ```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+
 const client = createClient({
   retries: 0, // let circuit breaker handle failures
-  circuit: {
-    threshold: 5, // Open after 5 consecutive failures
-    reset: 30_000, // Close after 30 seconds
-  },
+  plugins: [
+    circuitPlugin({
+      threshold: 5, // Open after 5 consecutive failures
+      reset: 30_000, // Close after 30 seconds
+    }),
+  ],
 })
 ```
 
@@ -227,12 +232,15 @@ const client = createClient({
 
 ```typescript
 // Different thresholds for different endpoints
+import { createClient } from '@fetchkit/ffetch'
+import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+
 const apiClient = createClient({
-  circuit: { threshold: 10, reset: 60_000 }, // More tolerant for API
+  plugins: [circuitPlugin({ threshold: 10, reset: 60_000 })], // More tolerant for API
 })
 
 const healthClient = createClient({
-  circuit: { threshold: 3, reset: 10_000 }, // Less tolerant for health checks
+  plugins: [circuitPlugin({ threshold: 3, reset: 10_000 })], // Less tolerant for health checks
 })
 ```
 
@@ -256,7 +264,8 @@ const healthClient = createClient({
 ### Error Handling Example
 
 ```typescript
-import createClient, {
+import {
+  createClient,
   TimeoutError,
   AbortError,
   CircuitOpenError,

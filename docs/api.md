@@ -1,284 +1,168 @@
 # API Reference
 
-## createClient(options?)
+## Imports
 
-Creates a new HTTP client instance with the specified configuration. You can use ffetch as a drop-in replacement for native fetch, or wrap any fetch-compatible implementation (e.g., node-fetch, undici, SvelteKit/Next.js/Nuxt-provided fetch) for SSR, edge, and custom environments.
+`@fetchkit/ffetch` now exports named symbols only.
 
 ```typescript
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
+```
+
+Feature plugins are exported from subpath entrypoints:
+
+```typescript
+import {
+  dedupePlugin,
+  dedupeRequestHash,
+} from '@fetchkit/ffetch/plugins/dedupe'
+import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+```
+
+Custom plugin authoring is documented in [plugins.md](./plugins.md).
+
+## createClient(options?)
+
+Creates a new HTTP client instance.
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
 
 const client = createClient({
   timeout: 5000,
-  retries: 3,
-  throwOnHttpError: true, // <-- Throws HttpError for 4xx/5xx/429 after all retries
-  // ... other options
+  retries: 2,
+  throwOnHttpError: true,
 })
-
-// Example: throwOnHttpError usage
-const clientStrict = createClient({ throwOnHttpError: true })
-// Throws HttpError for 404, 500, 429, etc.
-await clientStrict('https://example.com/404') // throws
 ```
 
-### Configuration Options
+### Core Options
 
-| Option                | Type                                                                                                                      | Default                             | Description                                                                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `timeout`             | `number` (ms)                                                                                                             | `5000`                              | Whole-request timeout in milliseconds. Use `0` to disable timeout                                                                                       |
-| `retries`             | `number`                                                                                                                  | `0`                                 | Maximum retry attempts                                                                                                                                  |
-| `retryDelay`          | `number \| (ctx: { attempt, request, response, error }) => number`                                                        | Exponential backoff + jitter        | Delay between retries                                                                                                                                   |
-| `shouldRetry`         | `(ctx: { attempt, request, response, error }) => boolean`                                                                 | Retries on network errors, 5xx, 429 | Custom retry logic                                                                                                                                      |
-| `dedupe`              | `boolean`                                                                                                                 | `false`                             | If true, enables automatic deduplication of in-flight identical requests.                                                                               |
-| `dedupeHashFn`        | `(params: DedupeHashParams) => string \| undefined`                                                                       | `dedupeRequestHash`                 | Custom function to generate deduplication keys. Return `undefined` to skip deduplication for a request.                                                 |
-| `dedupeTTL`           | `number` (ms)                                                                                                             | `undefined`                         | Optional TTL for dedupe-map entries. Expired entries are evicted by the sweeper.                                                                        |
-| `dedupeSweepInterval` | `number` (ms)                                                                                                             | `5000`                              | Interval used by the dedupe sweeper when `dedupeTTL` is set.                                                                                            |
-| `throwOnHttpError`    | `boolean`                                                                                                                 | `false`                             | If true, throws an `HttpError` for all HTTP error responses (all 4xx and 5xx) after all retries are exhausted. Otherwise, returns the final `Response`. |
-| `circuit`             | `{ threshold: number, reset: number }`                                                                                    | `undefined`                         | Circuit-breaker configuration                                                                                                                           |
-| `hooks`               | `{ before, after, onError, onRetry, onTimeout, onAbort, onCircuitOpen, onComplete, transformRequest, transformResponse }` | `{}`                                | Lifecycle hooks and transformers                                                                                                                        |
-| `fetchHandler`        | `(input: RequestInfo \| URL, init?: RequestInit) => Promise<Response>`                                                    | `global fetch`                      | Custom fetch-compatible implementation to wrap (e.g., SvelteKit, Next.js, Nuxt, node-fetch, undici, or any polyfill). Defaults to global fetch.         |
+| Option             | Type                                                                                                       | Default                             | Description                                                                           |
+| ------------------ | ---------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------- |
+| `timeout`          | `number` (ms)                                                                                              | `5000`                              | Whole-request timeout in milliseconds. Use `0` to disable timeout.                    |
+| `retries`          | `number`                                                                                                   | `0`                                 | Maximum retry attempts.                                                               |
+| `retryDelay`       | `number \| (ctx: { attempt, request, response, error }) => number`                                         | Exponential backoff + jitter        | Delay between retries.                                                                |
+| `shouldRetry`      | `(ctx: { attempt, request, response, error }) => boolean`                                                  | Retries on network errors, 5xx, 429 | Custom retry logic.                                                                   |
+| `throwOnHttpError` | `boolean`                                                                                                  | `false`                             | If true, throws an `HttpError` for 4xx/5xx/429 after retries are exhausted.           |
+| `hooks`            | `{ before, after, onError, onRetry, onTimeout, onAbort, onComplete, transformRequest, transformResponse }` | `{}`                                | Lifecycle hooks and transformers.                                                     |
+| `fetchHandler`     | `(input: RequestInfo \| URL, init?: RequestInit) => Promise<Response>`                                     | `global fetch`                      | Custom fetch-compatible implementation to wrap.                                       |
+| `plugins`          | `ClientPlugin[]`                                                                                           | `[]`                                | Optional plugin list. Use this for dedupe, circuit breaker, and third-party features. |
 
-### Deduplication
+### Plugin Features
 
-#### `dedupe` (boolean)
-
-Enable automatic deduplication of in-flight identical requests. When enabled, requests with the same deduplication key will share a single network call and response promise.
-
-#### `dedupeHashFn` (function)
-
-Custom function to generate deduplication keys. Receives a `DedupeHashParams` object (exported from the package) and should return a string key or `undefined` to skip deduplication.
-
-**Type:**
+#### Deduplication Plugin
 
 ```typescript
-import type { DedupeHashParams } from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
+import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
+
 const client = createClient({
-  dedupe: true,
-  dedupeHashFn: (params: DedupeHashParams) =>
-    `${params.method}|${params.url}|${params.body}`,
+  plugins: [
+    dedupePlugin({
+      hashFn: (params) => `${params.method}|${params.url}|${params.body}`,
+      ttl: 30_000,
+      sweepInterval: 5_000,
+    }),
+  ],
 })
 ```
 
-**Default:**
-Uses the built-in `dedupeRequestHash` function, which considers method, URL, and body, and skips deduplication for FormData and ReadableStream bodies.
+#### Circuit Breaker Plugin
 
-#### `dedupeTTL` (number, milliseconds)
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
 
-Optional TTL for dedupe-map entries. If set, expired entries are removed by a sweeper timer. This helps prevent stale in-flight dedupe keys from lingering indefinitely in failure or hanging-request scenarios.
+const client = createClient({
+  plugins: [
+    circuitPlugin({
+      threshold: 5,
+      reset: 30_000,
+      onCircuitOpen: (req) => console.warn('Circuit opened:', req.url),
+      onCircuitClose: (req) => console.info('Circuit closed:', req.url),
+    }),
+  ],
+})
 
-Important behavior:
+if (client.circuitOpen) {
+  console.warn('Circuit breaker is open')
+}
+```
 
-- Deduplication still works when `dedupeTTL` is `undefined`.
-- TTL eviction only removes dedupe keys from the map.
-- TTL eviction does **not** reject already in-flight promises.
+### Custom Plugins
 
-#### `dedupeSweepInterval` (number, milliseconds)
+Use the public plugin types from the root package and register your plugins via `plugins`.
 
-Controls how often the dedupe sweeper checks for expired entries when `dedupeTTL` is enabled.
+```typescript
+import { createClient, type ClientPlugin } from '@fetchkit/ffetch'
 
-- Default: `5000` ms.
-- Only relevant when `dedupeTTL` is set to a positive number.
+const headerPlugin: ClientPlugin = {
+  name: 'header-plugin',
+  preRequest: (ctx) => {
+    ctx.request = new Request(ctx.request, {
+      headers: {
+        ...Object.fromEntries(ctx.request.headers),
+        'x-trace-id': crypto.randomUUID(),
+      },
+    })
+  },
+}
 
-**Limitations:**
+const client = createClient({
+  plugins: [headerPlugin],
+})
+```
 
-- Deduplication is off by default.
-- Stream bodies (`ReadableStream`, `FormData`) are not deduped.
-- Use with caution for non-idempotent requests (e.g., POST).
-- Ensure your custom hash function uniquely identifies requests to avoid accidental deduplication.
+See [plugins.md](./plugins.md) for full lifecycle, ordering, extensions, and advanced patterns.
 
-See [deduplication.md](./deduplication.md) for full details.
+### Removed Legacy Options (Breaking)
 
-### Type Exports
+The following top-level options were removed and now throw a migration error if passed:
 
-The following types are exported for custom configuration:
+- `dedupe`
+- `dedupeHashFn`
+- `dedupeTTL`
+- `dedupeSweepInterval`
+- `circuit`
 
-- `DedupeHashParams` (for custom dedupe hash functions)
+Use plugin modules instead via `plugins: [...]`.
+
+### Per-request Overrides
+
+Core options can still be overridden per request:
+
+```typescript
+await client('https://example.com/data', {
+  timeout: 1000,
+  retries: 0,
+  throwOnHttpError: true,
+})
+```
 
 ### Return Type
 
 ```typescript
-type FFetch = (
-  input: RequestInfo | URL,
-  init?: RequestInit & {
-    // Per-request overrides for any client option
-    timeout?: number
-    retries?: number
-    retryDelay?: number | ((ctx: RetryContext) => number)
-    shouldRetry?: (ctx: RetryContext) => boolean
-    dedupe?: boolean
-    dedupeHashFn?: (params: DedupeHashParams) => string | undefined
-    dedupeTTL?: number
-    dedupeSweepInterval?: number
-    throwOnHttpError?: boolean
-    circuit?: { threshold: number; reset: number }
-    hooks?: HooksConfig
-    fetchHandler?: (
-      input: RequestInfo | URL,
-      init?: RequestInit
-    ) => Promise<Response>
-  }
-) => Promise<Response>
-```
-
-The returned function also has a `pendingRequests` property:
-
-```typescript
-client.pendingRequests: PendingRequest[]
-```
-
-Where `PendingRequest` is:
-
-```typescript
-interface PendingRequest {
-  promise: Promise<Response>
-  request: Request
-  controller: AbortController
-}
-```
-
-The client also exposes an `abortAll()` helper:
-
-```typescript
-client.abortAll(): void // Aborts all currently pending requests
-```
-
-### Circuit Breaker State
-
-#### client.circuitOpen
-
-`circuitOpen: boolean` — True if the circuit breaker is open (blocking requests), false otherwise.
-
-> **Note:** If the client is not configured with a circuit breaker, `client.circuitOpen` will always be `false`.
-
-This property allows you to check if the client is currently blocking requests due to repeated failures. It is useful for monitoring, debugging, or custom logic:
-
-```typescript
-if (client.circuitOpen) {
-  console.warn('Circuit breaker is open, requests are blocked.')
+type FFetch = {
+  (input: RequestInfo | URL, init?: RequestInit): Promise<Response>
+  pendingRequests: PendingRequest[]
+  abortAll: () => void
+  // Plugin extensions are composed into this type
 }
 ```
 
 ### Default Values
 
-| Option                | Default Value / Logic                                                                            |
-| --------------------- | ------------------------------------------------------------------------------------------------ |
-| `timeout`             | `5000` ms (5 seconds)                                                                            |
-| `retries`             | `0` (no retries)                                                                                 |
-| `retryDelay`          | Exponential backoff + jitter: `({ attempt }) => 2 ** attempt * 200 + Math.random() * 100`        |
-| `shouldRetry`         | Retries on network errors, HTTP 5xx, or 429. Does not retry on 4xx (except 429) or abort/timeout |
-| `dedupe`              | `false`                                                                                          |
-| `dedupeHashFn`        | `dedupeRequestHash`                                                                              |
-| `dedupeTTL`           | `undefined` (disabled)                                                                           |
-| `dedupeSweepInterval` | `5000` ms                                                                                        |
-| `circuit`             | `undefined` (circuit breaker disabled by default)                                                |
-| `hooks`               | `{}` (no hooks by default)                                                                       |
+| Option             | Default Value / Logic                                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------- |
+| `timeout`          | `5000` ms                                                                                       |
+| `retries`          | `0`                                                                                             |
+| `retryDelay`       | `({ attempt }) => 2 ** attempt * 200 + Math.random() * 100`                                     |
+| `shouldRetry`      | Retries on network errors, HTTP 5xx, or 429. Does not retry 4xx (except 429), abort, or timeout |
+| `throwOnHttpError` | `false`                                                                                         |
+| `hooks`            | `{}`                                                                                            |
+| `plugins`          | `[]`                                                                                            |
 
 ### Notes
 
-- Signal combination (user, timeout, transformRequest) requires `AbortSignal.any`. If your environment does not support it, you must install a polyfill before using ffetch.
-- The first retry attempt uses `attempt = 2` (i.e., the first call is attempt 1, first retry is 2)
-- `shouldRetry` default logic: retries on network errors, HTTP 5xx, or 429; does not retry on 4xx (except 429), abort, or timeout errors
-- All client options can be overridden on a per-request basis via the `init` parameter
-
-### Type Definitions
-
-```typescript
-interface RetryContext {
-  attempt: number
-  request: Request
-  response?: Response
-  error?: unknown
-}
-
-interface HooksConfig {
-  before?: (req: Request) => Promise<void> | void
-  after?: (req: Request, res: Response) => Promise<void> | void
-  onError?: (req: Request, err: unknown) => Promise<void> | void
-  onRetry?: (
-    req: Request,
-    attempt: number,
-    err?: unknown,
-    res?: Response
-  ) => Promise<void> | void
-  onTimeout?: (req: Request) => Promise<void> | void
-  onAbort?: (req: Request) => Promise<void> | void
-  onCircuitOpen?: (req: Request) => Promise<void> | void
-  onComplete?: (
-    req: Request,
-    res?: Response,
-    err?: unknown
-  ) => Promise<void> | void
-  transformRequest?: (req: Request) => Promise<Request> | Request
-  transformResponse?: (
-    res: Response,
-    req: Request
-  ) => Promise<Response> | Response
-}
-```
-
-### Usage Examples
-
-```typescript
-import createClient from '@fetchkit/ffetch'
-
-// Basic usage
-const client = createClient({
-  timeout: 5000,
-  retries: 3,
-})
-
-// Pass a custom fetch-compatible implementation (SSR, metaframeworks, polyfills, node-fetch, undici, etc.)
-const client = createClient({
-  timeout: 5000,
-  retries: 3,
-  fetchHandler: fetch, // SvelteKit/Next.js/Nuxt provide their own fetch
-})
-
-// Or use node-fetch/undici in Node.js
-import nodeFetch from 'node-fetch'
-const clientNode = createClient({ fetchHandler: nodeFetch })
-
-// Per-request fetchHandler override (useful for testing)
-const client = createClient({ retries: 0 })
-const mockFetch = () =>
-  Promise.resolve(
-    new Response(JSON.stringify({ test: 'data' }), { status: 200 })
-  )
-await client('https://example.com', { fetchHandler: mockFetch }) // Uses mockFetch
-await client('https://example.com') // Uses global fetch
-```
-
-## Circuit Breaker Hooks
-
-### onCircuitOpen
-
-Called when the circuit transitions to open after consecutive failures. Receives the request that triggered the open event.
-
-Signature: `(req: Request) => void | Promise<void>`
-
-### onCircuitClose
-
-Called when the circuit transitions to closed after a successful request. Receives the request that closed the circuit.
-
-Signature: `(req: Request) => void | Promise<void>`
-
-### Example
-
-```js
-const client = createClient({
-  circuit: { threshold: 2, reset: 1000 },
-  hooks: {
-    onCircuitOpen: (req) => console.warn('Circuit opened due to:', req.url),
-    onCircuitClose: (req) => console.info('Circuit closed after:', req.url),
-  },
-})
-```
-
-### Circuit Breaker Behavior
-
-- Circuit opens after `threshold` consecutive failures. The request that triggers the open is passed to `onCircuitOpen`.
-- Circuit closes after a successful request (after reset period). The successful request is passed to `onCircuitClose`.
-
-### Error Handling
-
-- Hooks are only called on state transitions, not every request.
-- Request errors and circuit state changes are handled separately.
+- Signal combination (user, timeout, transformRequest) requires `AbortSignal.any`.
+- The first retry attempt uses `attempt = 2`.
+- Plugin order is deterministic: first by `order`, then by registration order.

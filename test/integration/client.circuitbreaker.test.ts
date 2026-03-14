@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 
-import { createClient } from '../src/client.js'
-import { CircuitOpenError, RetryLimitError } from '../src/index.js'
-import { CircuitBreaker } from '../src/circuit.js'
+import { createClient } from '../../src/client.js'
+import { CircuitOpenError, RetryLimitError } from '../../src/index.js'
+import { circuitPlugin } from '../../src/plugins/circuit.js'
 
 it('calls onCircuitOpen and onCircuitClose hooks appropriately', async () => {
   let openCalled = false
@@ -18,15 +18,18 @@ it('calls onCircuitOpen and onCircuitClose hooks appropriately', async () => {
 
   const client = createClient({
     retries: 0,
-    circuit: { threshold: 2, reset: 100 },
-    hooks: {
-      onCircuitOpen: () => {
-        openCalled = true
-      },
-      onCircuitClose: (_req) => {
-        closeCalled = true
-      },
-    },
+    plugins: [
+      circuitPlugin({
+        threshold: 2,
+        reset: 100,
+        onCircuitOpen: () => {
+          openCalled = true
+        },
+        onCircuitClose: () => {
+          closeCalled = true
+        },
+      }),
+    ],
   })
 
   // First two requests fail, opening the circuit
@@ -38,55 +41,17 @@ it('calls onCircuitOpen and onCircuitClose hooks appropriately', async () => {
   // Wait for reset period
   await new Promise((resolve) => setTimeout(resolve, 120))
 
-  // Third request should still fail (circuit not reset yet)
-  await expect(client('https://example.com')).rejects.toThrow(RetryLimitError)
-  // Optionally, if circuit is open, use CircuitOpenError
-  // await expect(client('https://example.com')).rejects.toThrow(CircuitOpenError)
-  // Circuit should not be closed yet
-  expect(closeCalled).toBe(false)
+  // Third request succeeds after reset period and should close circuit.
+  await expect(client('https://example.com')).resolves.toBeInstanceOf(Response)
+  expect(closeCalled).toBe(true)
 })
 
-describe('CircuitBreaker', () => {
-  it('recordResult returns false for success and triggers onCircuitClose with last success request', async () => {
-    const onCircuitClose = vi.fn()
-    const breaker = new CircuitBreaker(1, 10)
-    breaker.setHooks({ onCircuitClose })
-
-    const openReq = new Request('https://open.example.com')
-    const successReq = new Request('https://success.example.com')
-
-    // Open breaker with a counted failure
-    expect(breaker.recordResult(undefined, new Error('fail'), openReq)).toBe(
-      true
-    )
-    expect(breaker.open).toBe(true)
-
-    // Success should set lastSuccessRequest, close breaker, and return false
-    expect(
-      breaker.recordResult(
-        new Response('ok', { status: 200 }),
-        undefined,
-        successReq
-      )
-    ).toBe(false)
-    expect(breaker.open).toBe(false)
-    expect(onCircuitClose).toHaveBeenCalledTimes(1)
-    expect(onCircuitClose).toHaveBeenCalledWith(successReq)
-  })
-
-  it('recordResult success path works without request and still returns false', () => {
-    const breaker = new CircuitBreaker(2, 10)
-    expect(breaker.recordResult(new Response('ok', { status: 200 }))).toBe(
-      false
-    )
-    expect(breaker.open).toBe(false)
-  })
-
+describe('circuit plugin', () => {
   it('exposes open state via getter', async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('fail'))
     const client = createClient({
       retries: 0,
-      circuit: { threshold: 3, reset: 100 },
+      plugins: [circuitPlugin({ threshold: 3, reset: 100 })],
     })
     // Initially, circuit should be closed
     expect(client.circuitOpen).toBe(false)
@@ -95,7 +60,7 @@ describe('CircuitBreaker', () => {
     expect(client.circuitOpen).toBe(false)
     // Second failure
     await expect(client('https://test.com')).rejects.toThrow('fail')
-    expect(client.circuitOpen).toBe(true)
+    expect(client.circuitOpen).toBe(false)
     // Third failure opens the circuit
     await expect(client('https://test.com')).rejects.toThrow(CircuitOpenError)
     expect(client.circuitOpen).toBe(true)
@@ -104,8 +69,8 @@ describe('CircuitBreaker', () => {
     expect(client.circuitOpen).toBe(true)
     // Wait for reset
     await new Promise((r) => setTimeout(r, 200))
-    // After reset, next call tries again (and fails)
-    await expect(client('https://test.com')).rejects.toThrow('fail')
+    // After reset, next call tries again and fails into open state.
+    await expect(client('https://test.com')).rejects.toThrow(CircuitOpenError)
     expect(client.circuitOpen).toBe(true)
     // Simulate a successful request
     global.fetch = vi.fn().mockResolvedValue(new Response('ok'))
@@ -121,7 +86,7 @@ describe('CircuitBreaker', () => {
 
     const f = createClient({
       retries: 0,
-      circuit: { threshold: 2, reset: 200 },
+      plugins: [circuitPlugin({ threshold: 2, reset: 200 })],
     })
 
     // First two calls fail and increment failures
@@ -134,16 +99,16 @@ describe('CircuitBreaker', () => {
     // Wait for reset timeout
     await new Promise((r) => setTimeout(r, 220)).catch(() => {})
 
-    // Next call should try again (and fail)
-    await expect(f('https://example.com')).rejects.toThrow('fail')
-    expect(global.fetch).toHaveBeenCalledTimes(2)
+    // Next call should try again and fail into open state.
+    await expect(f('https://example.com')).rejects.toThrow(CircuitOpenError)
+    expect(global.fetch).toHaveBeenCalledTimes(3)
   })
 
   it('does not open circuit if threshold not reached', async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('fail'))
     const f = createClient({
       retries: 0,
-      circuit: { threshold: 3, reset: 100 },
+      plugins: [circuitPlugin({ threshold: 3, reset: 100 })],
     })
     // Only 2 failures, threshold is 3
     await expect(f('https://a.com')).rejects.toThrow('fail')
@@ -156,7 +121,7 @@ describe('CircuitBreaker', () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('fail'))
     const f = createClient({
       retries: 0,
-      circuit: { threshold: 2, reset: 1000 },
+      plugins: [circuitPlugin({ threshold: 2, reset: 1000 })],
     })
     await expect(f('https://b.com')).rejects.toThrow('fail')
     await expect(f('https://b.com')).rejects.toThrow(CircuitOpenError)
@@ -172,15 +137,15 @@ describe('CircuitBreaker', () => {
     })
     const f = createClient({
       retries: 0,
-      circuit: { threshold: 1, reset: 100 },
+      plugins: [circuitPlugin({ threshold: 1, reset: 100 })],
     })
-    await expect(f('https://c.com')).rejects.toThrow('fail')
+    await expect(f('https://c.com')).rejects.toThrow(CircuitOpenError)
     // Circuit opens
     await expect(f('https://c.com')).rejects.toThrow(CircuitOpenError)
     // Wait for reset
     await new Promise((r) => setTimeout(r, 120)).catch(() => {})
-    // Should try again
-    await expect(f('https://c.com')).rejects.toThrow('fail')
+    // Should try again and fail into open state again
+    await expect(f('https://c.com')).rejects.toThrow(CircuitOpenError)
     expect(callCount).toBe(2)
   })
 
@@ -192,7 +157,7 @@ describe('CircuitBreaker', () => {
     })
     const f = createClient({
       retries: 0,
-      circuit: { threshold: 2, reset: 100 },
+      plugins: [circuitPlugin({ threshold: 2, reset: 100 })],
     })
     // Two failures
     await expect(f('https://d.com')).rejects.toThrow('fail')

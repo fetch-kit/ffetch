@@ -1,8 +1,12 @@
 export type { FFetch, FFetchOptions } from './types'
-export type { DedupeHashParams } from './dedupeRequestHash'
 export type { Hooks } from './hooks'
+export type {
+  ClientPlugin,
+  PluginRequestContext,
+  PluginDispatch,
+  PluginSetupContext,
+} from './plugins'
 
-import { createClient } from './client'
 export { createClient } from './client'
 
 export {
@@ -12,5 +16,3 @@ export {
   RetryLimitError,
   NetworkError,
 } from './error'
-
-export default createClient

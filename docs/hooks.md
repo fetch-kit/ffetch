@@ -12,7 +12,6 @@ Hooks allow you to observe, log, or modify the request/response lifecycle. All h
 - `onRetry(req, attempt, err, res)`: Called before each retry attempt
 - `onTimeout(req)`: Called when a request times out
 - `onAbort(req)`: Called when a request is aborted by the user
-- `onCircuitOpen(req)`: Called when the circuit breaker is open and a request is blocked
 - `onComplete(req, res, err)`: Called after every request, whether it succeeded or failed
 
 ### Basic Hooks Example
@@ -26,7 +25,6 @@ const client = createClient({
     onRetry: async (req, attempt, err) => console.log('Retrying', attempt),
     onTimeout: async (req) => console.warn('Timeout:', req.url),
     onAbort: async (req) => console.warn('Aborted:', req.url),
-    onCircuitOpen: async (req) => console.warn('Circuit open:', req.url),
     onComplete: async (req, res, err) => console.log('Done:', req.url),
   },
 })
@@ -274,7 +272,7 @@ const client = createClient({
 })
 ```
 
-## Circuit Breaker Hooks
+## Circuit Breaker Plugin Callbacks
 
 ### onCircuitOpen
 
@@ -291,12 +289,18 @@ Signature: `(req: Request) => void | Promise<void>`
 ### Example
 
 ```js
+import { createClient } from '@fetchkit/ffetch'
+import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+
 const client = createClient({
-  circuit: { threshold: 2, reset: 1000 },
-  hooks: {
-    onCircuitOpen: (req) => console.warn('Circuit opened due to:', req.url),
-    onCircuitClose: (req) => console.info('Circuit closed after:', req.url),
-  },
+  plugins: [
+    circuitPlugin({
+      threshold: 2,
+      reset: 1000,
+      onCircuitOpen: (req) => console.warn('Circuit opened due to:', req.url),
+      onCircuitClose: (req) => console.info('Circuit closed after:', req.url),
+    }),
+  ],
 })
 ```
 
@@ -317,8 +321,8 @@ If an error occurs or retry is needed:
 2. `onRetry` - Called before retry attempts
 3. `onTimeout` - Called on timeout errors
 4. `onAbort` - Called on abort errors
-5. `onCircuitOpen` - Called when circuit breaker transitions to open
-6. `onCircuitClose` - Called when circuit breaker transitions to closed
+5. Plugin `onCircuitOpen` callback - Called when circuit breaker transitions to open
+6. Plugin `onCircuitClose` callback - Called when circuit breaker transitions to closed
 7. `onComplete` - Always called last
 
 ## Per-Request Hooks

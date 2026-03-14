@@ -10,8 +10,6 @@ export type Hooks = {
   ) => void | Promise<void>
   onTimeout?: (req: Request) => void | Promise<void>
   onAbort?: (req: Request) => void | Promise<void>
-  onCircuitOpen?: (req: Request) => void | Promise<void>
-  onCircuitClose?: (req: Request) => void | Promise<void>
   onComplete?: (
     req: Request,
     res?: Response,

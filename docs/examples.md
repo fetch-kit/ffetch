@@ -9,10 +9,11 @@ Real-world examples and patterns for using `@fetchkit/ffetch` in different scena
 You can inspect the circuit breaker state at runtime using `client.circuitOpen` to avoid making requests when the circuit is open:
 
 ```typescript
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
+import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
 
 const client = createClient({
-  circuit: { threshold: 5, reset: 30000 },
+  plugins: [circuitPlugin({ threshold: 5, reset: 30000 })],
 })
 
 if (client.circuitOpen) {
@@ -28,7 +29,7 @@ if (client.circuitOpen) {
 ### Simple HTTP Client
 
 ```typescript
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
 
 const api = createClient({
   timeout: 10000,
@@ -49,7 +50,7 @@ const newUser = await api('https://api.example.com/users', {
 ### REST API Client
 
 ```typescript
-import createClient, { type FFetch } from '@fetchkit/ffetch'
+import { createClient, type FFetch } from '@fetchkit/ffetch'
 
 class ApiClient {
   private client: FFetch
@@ -117,7 +118,7 @@ const newUser = await api.post<User>('/users', { name: 'John' })
 ### Using ffetch with a Custom Fetch (e.g., node-fetch)
 
 ```typescript
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
 import fetch from 'node-fetch'
 
 const client = createClient({ fetchHandler: fetch })
@@ -130,7 +131,7 @@ const data = await response.json()
 You can provide a mock fetch handler at the client level or override it per-request:
 
 ```typescript
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
 
 function mockFetch(url, options) {
   return Promise.resolve(
@@ -169,7 +170,7 @@ const postsResponse = await client2('/api/posts', { fetchHandler: mockPosts })
 ### Microservices Client
 
 ```typescript
-import createClient, { type FFetch } from '@fetchkit/ffetch'
+import { createClient, type FFetch } from '@fetchkit/ffetch'
 
 interface ServiceConfig {
   baseUrl: string
@@ -193,7 +194,14 @@ class MicroserviceClient {
       const client = createClient({
         timeout: config.timeout || 5000,
         retries: config.retries || 2,
-        circuit: config.circuitBreaker,
+        plugins: config.circuitBreaker
+          ? [
+              circuitPlugin({
+                threshold: config.circuitBreaker.threshold,
+                reset: config.circuitBreaker.reset,
+              }),
+            ]
+          : [],
         hooks: {
           transformRequest: async (req) => {
             // Properly construct full URL
@@ -275,7 +283,7 @@ const client = new MicroserviceClient({
 ### GraphQL Client
 
 ```typescript
-import createClient, { type FFetch } from '@fetchkit/ffetch'
+import { createClient, type FFetch } from '@fetchkit/ffetch'
 
 class GraphQLClient {
   private client: FFetch
@@ -365,7 +373,7 @@ const user = await gql.query(
 ### File Upload Client
 
 ```typescript
-import createClient, { type FFetch } from '@fetchkit/ffetch'
+import { createClient, type FFetch } from '@fetchkit/ffetch'
 
 class FileUploadClient {
   private client: FFetch
@@ -462,7 +470,7 @@ const results = await uploader.uploadMultiple(files, '/api/upload')
 For very large uploads, streaming operations, or long-running requests where you don't want any timeout:
 
 ```typescript
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
 
 // Client with no timeout - useful for streaming or very large uploads
 const streamingClient = createClient({
@@ -505,7 +513,7 @@ async function longRequest() {
 ### Real-time Data Polling
 
 ```typescript
-import createClient, { AbortError, type FFetch } from '@fetchkit/ffetch'
+import { createClient, AbortError, type FFetch } from '@fetchkit/ffetch'
 
 class DataPoller {
   private client: FFetch
@@ -580,12 +588,16 @@ window.addEventListener('beforeunload', () => poller.stopPolling())
 Use this when you want to dedupe concurrent identical requests and optionally evict stale in-flight dedupe keys:
 
 ```typescript
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
+import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
 
 const client = createClient({
-  dedupe: true,
-  dedupeTTL: 30_000,
-  dedupeSweepInterval: 5_000,
+  plugins: [
+    dedupePlugin({
+      ttl: 30_000,
+      sweepInterval: 5_000,
+    }),
+  ],
 })
 
 const p1 = client('https://api.example.com/profile')
@@ -595,10 +607,10 @@ const p2 = client('https://api.example.com/profile')
 const [r1, r2] = await Promise.all([p1, p2])
 ```
 
-> Note: `dedupeTTL` is not response caching TTL. It only evicts entries in the internal dedupe map.
+> Note: dedupe plugin `ttl` is not response caching TTL. It only evicts entries in the internal dedupe map.
 
 ```typescript
-import createClient, { type FFetch } from '@fetchkit/ffetch'
+import { createClient, type FFetch } from '@fetchkit/ffetch'
 
 interface CacheEntry<T> {
   data: T
@@ -707,6 +719,9 @@ const result = await cachedClient.post('/api/search', { query: 'test' }, 30000) 
 ### Graceful Degradation
 
 ```typescript
+import { createClient, type FFetch } from '@fetchkit/ffetch'
+import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+
 class ResilientApiClient {
   private client: FFetch
   private fallbackData: Record<string, any> = {}
@@ -715,7 +730,7 @@ class ResilientApiClient {
     this.client = createClient({
       timeout: 5000,
       retries: 3,
-      circuit: { threshold: 5, reset: 30000 },
+      plugins: [circuitPlugin({ threshold: 5, reset: 30000 })],
     })
   }
 

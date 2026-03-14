@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createClient } from '../src/client.js'
-import { CircuitOpenError } from '../src/error.js'
+import { createClient } from '../../src/client.js'
+import {
+  CircuitOpenError,
+  TimeoutError,
+  AbortError,
+  NetworkError,
+} from '../../src/error.js'
+import { circuitPlugin } from '../../src/plugins/circuit.js'
 
 describe('Hooks', () => {
   it('calls before, after, and onComplete hooks on success', async () => {
@@ -89,15 +95,111 @@ describe('Hooks', () => {
     expect(onAbort).toHaveBeenCalled()
   })
 
+  it('calls onError and onComplete with TimeoutError when timeout wins over a non-aborted user signal', async () => {
+    const onTimeout = vi.fn()
+    const onError = vi.fn()
+    const onComplete = vi.fn()
+    const userController = new AbortController()
+
+    global.fetch = vi.fn().mockImplementation(async (input) => {
+      const signal = input instanceof Request ? input.signal : undefined
+      return await new Promise((_resolve, reject) => {
+        if (signal && signal.aborted) {
+          reject(new DOMException('aborted', 'AbortError'))
+        } else if (signal) {
+          signal.addEventListener(
+            'abort',
+            () => reject(new DOMException('aborted', 'AbortError')),
+            { once: true }
+          )
+        }
+      })
+    })
+
+    const f = createClient({
+      timeout: 10,
+      hooks: { onTimeout, onError, onComplete },
+    })
+
+    await expect(
+      f('https://example.com/timeout-with-user-signal', {
+        signal: userController.signal,
+      })
+    ).rejects.toBeInstanceOf(TimeoutError)
+
+    expect(onTimeout).toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.any(TimeoutError)
+    )
+    expect(onComplete).toHaveBeenCalledWith(
+      expect.any(Request),
+      undefined,
+      expect.any(TimeoutError)
+    )
+  })
+
+  it('calls onError and onComplete with AbortError when user aborts before dispatch', async () => {
+    const onAbort = vi.fn()
+    const onError = vi.fn()
+    const onComplete = vi.fn()
+
+    const controller = new AbortController()
+    controller.abort()
+
+    global.fetch = vi.fn().mockImplementation(async () => {
+      throw new Error('fetch should not be called')
+    })
+
+    const f = createClient({ hooks: { onAbort, onError, onComplete } })
+    await expect(
+      f('https://example.com/abort-before-dispatch', {
+        signal: controller.signal,
+      })
+    ).rejects.toBeInstanceOf(AbortError)
+
+    expect(onAbort).toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.any(AbortError)
+    )
+    expect(onComplete).toHaveBeenCalledWith(
+      expect.any(Request),
+      undefined,
+      expect.any(AbortError)
+    )
+  })
+
+  it('calls onError and onComplete with NetworkError on network failures', async () => {
+    const onError = vi.fn()
+    const onComplete = vi.fn()
+
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('failed to fetch'))
+
+    const f = createClient({ hooks: { onError, onComplete } })
+    await expect(f('https://example.com/network')).rejects.toBeInstanceOf(
+      NetworkError
+    )
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.any(NetworkError)
+    )
+    expect(onComplete).toHaveBeenCalledWith(
+      expect.any(Request),
+      undefined,
+      expect.any(NetworkError)
+    )
+  })
+
   it('calls onCircuitOpen hook when circuit breaker is open', async () => {
     const onCircuitOpen = vi.fn()
     global.fetch = vi.fn().mockRejectedValue(new Error('fail'))
     const f = createClient({
       retries: 0,
-      circuit: { threshold: 1, reset: 50 },
-      hooks: { onCircuitOpen },
+      plugins: [circuitPlugin({ threshold: 1, reset: 50, onCircuitOpen })],
     })
-    await expect(f('https://example.com')).rejects.toThrow('fail')
+    await expect(f('https://example.com')).rejects.toThrow('Circuit is open')
     await expect(f('https://example.com')).rejects.toThrow('Circuit is open')
     expect(onCircuitOpen).toHaveBeenCalled()
   })
@@ -274,7 +376,7 @@ describe('Hooks', () => {
     let onErrorCalled = false
     let onCompleteCalled = false
     const client = createClient({
-      circuit: { threshold: 1, reset: 10000 },
+      plugins: [circuitPlugin({ threshold: 1, reset: 10000 })],
       fetchHandler: () => {
         throw new Error('fail')
       },
@@ -288,12 +390,15 @@ describe('Hooks', () => {
       },
     })
     // First request fails, circuit opens
-    await expect(client('https://example.com')).rejects.toThrow()
+    await expect(client('https://example.com')).rejects.toThrow(
+      CircuitOpenError
+    )
     // Second request should trigger CircuitOpenError and hooks
     await expect(client('https://example.com')).rejects.toThrow(
       CircuitOpenError
     )
-    expect(onErrorCalled).toBe(true)
-    expect(onCompleteCalled).toBe(true)
+    // CircuitOpenError is generated by plugin control-flow, not core hook error mapping.
+    expect(onErrorCalled).toBe(false)
+    expect(onCompleteCalled).toBe(false)
   })
 })

@@ -29,7 +29,7 @@ require('abortcontroller-polyfill/dist/polyfill-patch-fetch')
 import 'abort-controller-x/polyfill'
 
 // Now you can use ffetch
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
 ```
 
 ### Node.js Specific Considerations
@@ -257,7 +257,7 @@ const client = createClient({
 
 ```jsx
 import { useEffect, useState } from 'react'
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
 
 const client = createClient({ timeout: 5000 })
 
@@ -292,7 +292,7 @@ function DataComponent() {
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import createClient from '@fetchkit/ffetch'
+import { createClient } from '@fetchkit/ffetch'
 
 const client = createClient({ timeout: 5000 })
 const data = ref(null)
@@ -324,7 +324,7 @@ onUnmounted(() => {
 ```svelte
 <script>
   import { onMount, onDestroy } from 'svelte'
-  import createClient from '@fetchkit/ffetch'
+  import { createClient } from '@fetchkit/ffetch'
 
   const client = createClient({ timeout: 5000 })
   let data = null
