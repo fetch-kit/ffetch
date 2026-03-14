@@ -116,7 +116,7 @@ See [plugins.md](./plugins.md) for full lifecycle, ordering, extensions, and adv
 
 ### Removed Legacy Options (Breaking)
 
-The following top-level options were removed and now throw a migration error if passed:
+The following top-level options were removed:
 
 - `dedupe`
 - `dedupeHashFn`
@@ -164,5 +164,5 @@ type FFetch = {
 ### Notes
 
 - Signal combination (user, timeout, transformRequest) requires `AbortSignal.any`.
-- The first retry attempt uses `attempt = 2`.
+- The first retry decision uses `attempt = 1`.
 - Plugin order is deterministic: first by `order`, then by registration order.

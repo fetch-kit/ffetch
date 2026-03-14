@@ -24,7 +24,7 @@ if (client.circuitOpen) {
 }
 ```
 
-// If the client is not configured with a circuit breaker, client.circuitOpen will always be false.
+// `client.circuitOpen` is available when `circuitPlugin(...)` is installed on the client.
 
 ### Simple HTTP Client
 

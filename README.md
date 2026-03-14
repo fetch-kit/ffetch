@@ -156,12 +156,12 @@ Native `fetch`'s controversial behavior of not throwing errors for HTTP error st
 
 ## Environment Requirements
 
-`ffetch` requires modern AbortSignal APIs:
+`ffetch` works best with native `AbortSignal.any` support:
 
-- **Node.js 20.6+** (for AbortSignal.any)
-- **Modern browsers** (Chrome 117+, Firefox 117+, Safari 17+, Edge 117+)
+- **Node.js 20.6+** (native `AbortSignal.any`)
+- **Modern browsers with `AbortSignal.any`** (for example: Chrome 117+, Firefox 117+, Safari 17+, Edge 117+)
 
-If your environment does not support `AbortSignal.any` (Node.js < 20.6, older browsers), you **must install a polyfill** before using ffetch. See the [compatibility guide](./docs/compatibility.md) for instructions.
+If your environment does not support `AbortSignal.any` (Node.js < 20.6, older browsers), you can still use ffetch by installing an `AbortSignal.any` polyfill. `AbortSignal.timeout` is optional because ffetch includes an internal timeout fallback. See the [compatibility guide](./docs/compatibility.md) for instructions.
 
 **Custom fetch support:**
 You can pass any fetch-compatible implementation (native fetch, node-fetch, undici, SvelteKit, Next.js, Nuxt, or a polyfill) via the `fetchHandler` option. This makes ffetch fully compatible with SSR, edge, metaframework environments, custom backends, and test runners.

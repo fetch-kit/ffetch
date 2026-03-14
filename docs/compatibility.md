@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-`ffetch` requires modern AbortSignal APIs, specifically `AbortSignal.timeout` and **AbortSignal.any**. Signal combination requires `AbortSignal.any` (native or polyfill).
+`ffetch` can work without native `AbortSignal.timeout` because it has an internal timeout fallback. Signal combination requires **`AbortSignal.any`** (native or polyfill).
 
 ## Node.js Support
 
@@ -13,7 +13,8 @@
 
 ### Polyfills for Older Versions
 
-For older Node.js versions, you must install a polyfill for both `AbortSignal.timeout` and `AbortSignal.any`:
+For older Node.js versions, you must install a polyfill for `AbortSignal.any`.
+`AbortSignal.timeout` polyfill is optional because `ffetch` has an internal timeout fallback:
 
 ```bash
 npm install abortcontroller-polyfill abort-controller-x
@@ -22,10 +23,10 @@ npm install abortcontroller-polyfill abort-controller-x
 Then ensure the APIs are available globally before importing `ffetch`:
 
 ```javascript
-// Option 1: abortcontroller-polyfill (for AbortSignal.timeout)
+// Optional: abortcontroller-polyfill (for native-style AbortSignal.timeout)
 require('abortcontroller-polyfill/dist/polyfill-patch-fetch')
 
-// Option 2: abort-controller-x (for AbortSignal.any)
+// Required when AbortSignal.any is missing
 import 'abort-controller-x/polyfill'
 
 // Now you can use ffetch
@@ -43,21 +44,26 @@ await client('https://api.example.com') // Works
 await client('http://localhost:3000') // Works
 ```
 
-#### Custom Agents
+#### Custom Node Connection Agent
 
 ```javascript
 import https from 'https'
+import fetch from 'node-fetch'
 
-const client = createClient()
-
-// Use custom HTTPS agent
-await client('https://api.example.com', {
-  agent: new https.Agent({
-    keepAlive: true,
-    timeout: 5000,
-  }),
+const agent = new https.Agent({
+  keepAlive: true,
+  timeout: 5000,
 })
+
+// Wrap your fetch implementation and inject transport-specific options there.
+const fetchWithAgent = (input, init) => fetch(input, { ...init, agent })
+
+const client = createClient({ fetchHandler: fetchWithAgent })
+
+await client('https://api.example.com')
 ```
+
+`agent` is fetch-implementation-specific and not part of standard `RequestInit`. Prefer configuring it inside `fetchHandler`.
 
 #### Self-signed Certificates (Development)
 
@@ -65,28 +71,33 @@ await client('https://api.example.com', {
 // For development only - never use in production
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
-// Better approach: use custom agent
+// Better approach: configure a custom agent in fetchHandler
 import https from 'https'
+import fetch from 'node-fetch'
 
 const agent = new https.Agent({
   rejectUnauthorized: false,
 })
 
-await client('https://localhost:8443', { agent })
+const client = createClient({
+  fetchHandler: (input, init) => fetch(input, { ...init, agent }),
+})
+
+await client('https://localhost:8443')
 ```
 
 ## Browser Support
 
 ### Modern Browsers (Recommended)
 
-- **Chrome 88+**: Full support
-- **Firefox 89+**: Full support
-- **Safari 15.4+**: Full support
-- **Edge 88+**: Full support
+- **Chrome 117+**: Native support for required AbortSignal APIs
+- **Firefox 117+**: Native support for required AbortSignal APIs
+- **Safari 17+**: Native support for required AbortSignal APIs
+- **Edge 117+**: Native support for required AbortSignal APIs
 
 ### Legacy Browser Support
 
-For older browsers, you need polyfills for `AbortSignal.timeout` and `AbortSignal.any`:
+Older browsers can still work when `AbortSignal.any` is polyfilled. `AbortSignal.timeout` polyfill is optional:
 
 ```html
 <!-- Include polyfills before your app -->
@@ -95,7 +106,7 @@ For older browsers, you need polyfills for `AbortSignal.timeout` and `AbortSigna
 
 <!-- Your app -->
 <script type="module">
-  import createClient from 'https://unpkg.com/@fetchkit/ffetch/dist/index.min.js'
+  import { createClient } from 'https://unpkg.com/@fetchkit/ffetch/dist/index.min.js'
   // ... your code
 </script>
 ```
@@ -118,8 +129,8 @@ self.addEventListener('fetch', async (event) => {
 #### Web Workers
 
 ```javascript
-// Works in web workers
-importScripts('https://unpkg.com/@fetchkit/ffetch/dist/index.min.js')
+// Use a module worker and import the ESM build
+import { createClient } from 'https://unpkg.com/@fetchkit/ffetch/dist/index.min.js'
 
 const client = createClient()
 self.postMessage(await client('/api/data').then((r) => r.json()))
@@ -202,10 +213,6 @@ function checkCompatibility() {
     throw new Error('AbortSignal not supported. Please add a polyfill.')
   }
 
-  if (typeof AbortSignal.timeout !== 'function') {
-    throw new Error('AbortSignal.timeout not supported. Please add a polyfill.')
-  }
-
   if (typeof AbortSignal.any !== 'function') {
     throw new Error(
       'AbortSignal.any is required for combining multiple signals. Please install a polyfill.'
@@ -234,22 +241,16 @@ const client = createClient({
 
 ```html
 <script type="module">
-  import createClient from 'https://unpkg.com/@fetchkit/ffetch/dist/index.min.js'
+  import { createClient } from 'https://unpkg.com/@fetchkit/ffetch/dist/index.min.js'
 
   const client = createClient()
   const data = await client('/api/data').then((r) => r.json())
 </script>
 ```
 
-### UMD (Legacy)
+### UMD
 
-```html
-<script src="https://unpkg.com/@fetchkit/ffetch/dist/index.umd.js"></script>
-<script>
-  const client = FFetch.createClient()
-  // ... use client
-</script>
-```
+`ffetch` does not currently publish a UMD build. Use the ESM build shown above (or import from the package in a bundler/runtime environment).
 
 ## Framework Integration
 
@@ -355,7 +356,7 @@ onUnmounted(() => {
 
 ### SSR Frameworks: SvelteKit, Next.js, Nuxt
 
-For SvelteKit, Next.js, and Nuxt, you must pass the exact fetch instance provided by the framework in your handler or context. This is not the global fetch, and the parameter name may vary (often `fetch`, but check your framework docs).
+For SvelteKit, Next.js, and Nuxt, it is recommended to pass the fetch instance provided by the framework in your handler or context for SSR-safe behavior. The parameter name may vary (often `fetch`, but check your framework docs).
 
 **SvelteKit example:**
 
@@ -392,7 +393,7 @@ export default async function handler(request) {
 }
 ```
 
-> Always use the fetch instance provided by the framework in your handler/context, not the global fetch. The parameter name may vary, but it is always context-specific.
+> Recommended: use the fetch instance provided by the framework in handler/context code. ffetch also supports any fetch-compatible implementation and falls back to global fetch when no `fetchHandler` is provided.
 
 ## Troubleshooting
 
@@ -401,7 +402,9 @@ export default async function handler(request) {
 #### "AbortSignal.timeout is not a function"
 
 ```
-Solution: Add a polyfill for AbortSignal.timeout
+ffetch has an internal fallback, so this is usually non-fatal.
+
+Optional: add a polyfill for AbortSignal.timeout
 npm install abortcontroller-polyfill
 ```
 

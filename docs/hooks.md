@@ -4,15 +4,29 @@ Hooks allow you to observe, log, or modify the request/response lifecycle. All h
 
 ## Lifecycle Hooks
 
+In this document, **core hooks** means the callbacks under `createClient({ hooks: ... })`:
+
+- `before`
+- `after`
+- `onError`
+- `onRetry`
+- `onTimeout`
+- `onAbort`
+- `onComplete`
+- `transformRequest`
+- `transformResponse`
+
+These are separate from plugin lifecycle callbacks (`setup`, `preRequest`, `wrapDispatch`, `onSuccess`, `onError`, `onFinally`).
+
 ### Available Hooks
 
 - `before(req)`: Called before each request is sent
 - `after(req, res)`: Called after a successful response
-- `onError(req, err)`: Called when a request fails with any error
+- `onError(req, err)`: Called when core request execution fails (before plugin post-processing)
 - `onRetry(req, attempt, err, res)`: Called before each retry attempt
 - `onTimeout(req)`: Called when a request times out
 - `onAbort(req)`: Called when a request is aborted by the user
-- `onComplete(req, res, err)`: Called after every request, whether it succeeded or failed
+- `onComplete(req, res, err)`: Called when core request execution completes (last among core hooks)
 
 ### Basic Hooks Example
 
@@ -256,10 +270,11 @@ const client = createClient({
   retries: 3,
   hooks: {
     onRetry: async (req, attempt, err, res) => {
-      console.log(`Retry ${attempt - 1}/3 for ${req.url}`)
+      // `attempt` is zero-based in onRetry (0 = first retry)
+      console.log(`Retry ${attempt + 1}/3 for ${req.url}`)
 
       // Add exponential backoff delay
-      const delay = Math.min(1000 * Math.pow(2, attempt - 2), 10000)
+      const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
       console.log(`Waiting ${delay}ms before retry...`)
       await new Promise((resolve) => setTimeout(resolve, delay))
 
@@ -276,7 +291,7 @@ const client = createClient({
 
 ### onCircuitOpen
 
-Called when the circuit transitions to open after consecutive failures. Receives the request that triggered the open event.
+Called when the circuit opens after consecutive failures, and also when a request is blocked while the circuit is already open. Receives the request associated with that event.
 
 Signature: `(req: Request) => void | Promise<void>`
 
@@ -313,17 +328,20 @@ When a request is made, hooks execute in this order:
 3. **Request is sent**
 4. `transformResponse` - Modify the incoming response (if successful)
 5. `after` - Called after successful response
-6. `onComplete` - Always called last
+6. `onComplete` - Last among core hooks
 
 If an error occurs or retry is needed:
 
-1. `onError` - Called on any error
+1. `onError` - Called on core execution errors
 2. `onRetry` - Called before retry attempts
 3. `onTimeout` - Called on timeout errors
 4. `onAbort` - Called on abort errors
-5. Plugin `onCircuitOpen` callback - Called when circuit breaker transitions to open
+5. Plugin `onCircuitOpen` callback - Called when circuit opens, and on blocked requests while already open
 6. Plugin `onCircuitClose` callback - Called when circuit breaker transitions to closed
-7. `onComplete` - Always called last
+7. `onComplete` - Last among core hooks
+
+After core hooks run, plugin lifecycle callbacks may still run (for example plugin `onSuccess`, `onError`, and `onFinally`).
+If a plugin throws after core completion, core `onError` is not re-fired and core `onComplete` may already have run with success arguments.
 
 ## Per-Request Hooks
 

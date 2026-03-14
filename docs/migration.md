@@ -127,11 +127,7 @@ const plugins = [circuitPlugin({ threshold: 5, reset: 30_000 })] as const
 const client = createClient({ plugins })
 ```
 
-## 6) Runtime Guard for Legacy Options
-
-v5 throws a clear runtime error if removed options are still present in client options or per-request init.
-
-## 7) Quick Upgrade Checklist
+## 6) Quick Upgrade Checklist
 
 1. Replace default root import with named root import.
 2. Add plugin imports from:

@@ -126,7 +126,7 @@ You can provide a function for `retryDelay` that receives a context object:
 ```typescript
 const client = createClient({
   retryDelay: ({ attempt, request, response, error }) => {
-    // attempt: number (starts at 2 for first retry)
+    // attempt: number (starts at 1 for first retry decision)
     // request: Request
     // response: Response | undefined
     // error: unknown
@@ -198,13 +198,14 @@ This is useful for:
 - Implementing custom fallback or degraded mode logic
 - Integrating with dashboards or metrics
 
-> **Note:** If the client is not configured with a circuit breaker (`circuit` option omitted), `client.circuitOpen` will always be `false` and the property is inert.
+> **Note:** `client.circuitOpen` is provided by `circuitPlugin`. If that plugin is not installed, this extension is not available on the client.
 
 ### How it Works
 
 - When the number of consecutive failures reaches the `threshold`, the circuit "opens" and all further requests fail fast with a `CircuitOpenError`
 - After the `reset` period (in milliseconds), the circuit "closes" and requests are allowed again
 - If a request succeeds, the failure count resets
+- If `onCircuitOpen` is configured, it runs both when the circuit opens and when requests are blocked while it is already open
 
 ### Configuration
 
