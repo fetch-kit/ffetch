@@ -276,7 +276,8 @@ export function createClient<
           effectiveRetries,
           effectiveRetryDelay,
           shouldRetryWithHook,
-          request
+          request,
+          combinedSignal
         )
         if (effectiveHooks.transformResponse) {
           res = await effectiveHooks.transformResponse(res, request)

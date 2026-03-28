@@ -13,12 +13,40 @@ export const defaultDelay: RetryDelay = (ctx) => {
   return 2 ** ctx.attempt * 200 + Math.random() * 100
 }
 
+function waitForRetryDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0) return Promise.resolve()
+  return new Promise((resolve) => {
+    if (!signal) {
+      setTimeout(resolve, ms)
+      return
+    }
+
+    if (signal.aborted) {
+      resolve()
+      return
+    }
+
+    const onAbort = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 export async function retry(
   fn: () => Promise<Response>,
   retries: number,
   delay: RetryDelay,
   shouldRetry: (ctx: RetryContext) => boolean = () => true,
-  request: Request
+  request: Request,
+  signal?: AbortSignal
 ): Promise<Response> {
   let lastErr: unknown
   let lastRes: Response | undefined
@@ -36,7 +64,7 @@ export async function retry(
       ctx.error = undefined
       if (i < retries && shouldRetry(ctx)) {
         const wait = typeof delay === 'function' ? delay(ctx) : delay
-        await new Promise((r) => setTimeout(r, wait))
+        await waitForRetryDelay(wait, signal)
         continue
       }
       return lastRes
@@ -45,7 +73,7 @@ export async function retry(
       ctx.error = err
       if (i === retries || !shouldRetry(ctx)) throw err
       const wait = typeof delay === 'function' ? delay(ctx) : delay
-      await new Promise((r) => setTimeout(r, wait))
+      await waitForRetryDelay(wait, signal)
     }
   }
   throw lastErr

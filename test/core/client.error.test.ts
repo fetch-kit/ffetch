@@ -293,10 +293,29 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
         (err instanceof AbortError &&
           err.message === 'Request was aborted by user' &&
           err.cause === undefined) ||
-        (err instanceof TimeoutError && err.cause instanceof DOMException)
+        err instanceof TimeoutError
     )
     expect(abortFired).toBe(true)
   }, 1000)
+
+  it('AbortError: thrown when user aborts during retry backoff delay', async () => {
+    const fetchSpy = vi.fn().mockRejectedValue(new Error('first failure'))
+
+    global.fetch = fetchSpy
+    const controller = new AbortController()
+    const f = createClient({ retries: 1, retryDelay: 10_000 })
+
+    const promise = f('https://example.com', { signal: controller.signal })
+
+    setTimeout(() => controller.abort(), 5)
+
+    await expect(promise).rejects.toSatisfy(
+      (err) =>
+        err instanceof AbortError &&
+        err.message === 'Request was aborted by user'
+    )
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
 
   it('NetworkError: thrown for different network error messages', async () => {
     const nativeErr = new TypeError('NetworkError: lost connection')
