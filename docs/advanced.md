@@ -119,6 +119,8 @@ setInterval(() => {
 
 ## Retry Strategies and Backoff
 
+If a request is aborted while waiting between retries, ffetch stops waiting immediately and does not start another retry attempt.
+
 ### Custom Retry Delay
 
 You can provide a function for `retryDelay` that receives a context object:

@@ -21,6 +21,7 @@ ffetch uses a plugin architecture for optional features, so you only include wha
 
 - **Timeouts** – per-request or global
 - **Retries** – exponential backoff + jitter
+- **Abort-aware retries** – aborting during backoff cancels immediately
 - **Plugin architecture** – extensible lifecycle-based plugins for optional behavior
 - **Hooks** – logging, auth, metrics, request/response transformation
 - **Pending requests** – real-time monitoring of active requests
