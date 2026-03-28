@@ -1,5 +1,12 @@
 # ffetch
 
+## 5.0.1
+
+### Patch Changes
+
+- 20c43e2: Fixed
+  - Retry backoff to wake immediately on abort/timeout.
+
 ## 5.0.0
 
 ### Major Changes
