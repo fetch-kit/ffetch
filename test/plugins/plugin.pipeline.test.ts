@@ -241,4 +241,94 @@ describe('plugin pipeline', () => {
     expect(requestIds).toHaveLength(2)
     expect(requestIds[0]).not.toBe(requestIds[1])
   })
+
+  it('applies decoratePromise hooks in sorted plugin order', async () => {
+    const calls: string[] = []
+
+    const pluginA: ClientPlugin<Record<never, never>, { aDecorated: true }> = {
+      name: 'a',
+      order: 20,
+      decoratePromise: (promise) => {
+        calls.push('a.decorate')
+        Object.defineProperty(promise, 'aDecorated', {
+          value: true,
+          enumerable: false,
+          writable: false,
+          configurable: false,
+        })
+        return promise as Promise<Response> & { aDecorated: true }
+      },
+    }
+
+    const pluginB: ClientPlugin<Record<never, never>, { bDecorated: true }> = {
+      name: 'b',
+      order: 10,
+      decoratePromise: (promise) => {
+        calls.push('b.decorate')
+        Object.defineProperty(promise, 'bDecorated', {
+          value: true,
+          enumerable: false,
+          writable: false,
+          configurable: false,
+        })
+        return promise as Promise<Response> & { bDecorated: true }
+      },
+    }
+
+    const client = createClient({
+      plugins: [pluginA, pluginB],
+      fetchHandler: async () => new Response('ok', { status: 200 }),
+    })
+
+    const pending = client(
+      'https://example.com/decorate-order'
+    ) as Promise<Response> & {
+      aDecorated: true
+      bDecorated: true
+    }
+
+    expect(calls).toEqual(['b.decorate', 'a.decorate'])
+    expect(pending.bDecorated).toBe(true)
+    expect(pending.aDecorated).toBe(true)
+    await expect(pending).resolves.toBeInstanceOf(Response)
+  })
+
+  it('keeps decoratePromise and wrapDispatch behavior composable', async () => {
+    const events: string[] = []
+
+    const plugin: ClientPlugin<Record<never, never>, { tagged: true }> = {
+      name: 'compose',
+      wrapDispatch: (next) => async (ctx) => {
+        events.push('wrap.before')
+        const res = await next(ctx)
+        events.push('wrap.after')
+        return res
+      },
+      decoratePromise: (promise) => {
+        events.push('decorate')
+        Object.defineProperty(promise, 'tagged', {
+          value: true,
+          enumerable: false,
+          writable: false,
+          configurable: false,
+        })
+        return promise as Promise<Response> & { tagged: true }
+      },
+    }
+
+    const client = createClient({
+      plugins: [plugin],
+      fetchHandler: async () => new Response('ok', { status: 200 }),
+    })
+
+    const pending = client(
+      'https://example.com/compose'
+    ) as Promise<Response> & {
+      tagged: true
+    }
+
+    expect(pending.tagged).toBe(true)
+    await pending
+    expect(events).toEqual(['decorate', 'wrap.before', 'wrap.after'])
+  })
 })

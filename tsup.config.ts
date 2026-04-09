@@ -2,7 +2,12 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig([
   {
-    entry: ['src/index.ts', 'src/plugins/dedupe.ts', 'src/plugins/circuit.ts'],
+    entry: [
+      'src/index.ts',
+      'src/plugins/dedupe.ts',
+      'src/plugins/circuit.ts',
+      'src/plugins/response-shortcuts.ts',
+    ],
     format: ['esm', 'cjs'],
     dts: true,
     minify: false,

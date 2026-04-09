@@ -4,6 +4,7 @@ import { createClient } from '../../src/client.js'
 import { CircuitOpenError } from '../../src/error.js'
 import { dedupePlugin } from '../../src/plugins/dedupe.js'
 import { circuitPlugin } from '../../src/plugins/circuit.js'
+import { responseShortcutsPlugin } from '../../src/plugins/response-shortcuts.js'
 import type { ClientPlugin } from '../../src/plugins.js'
 
 describe('plugin ordering and interactions', () => {
@@ -119,5 +120,44 @@ describe('plugin ordering and interactions', () => {
     ])
 
     expect(global.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('response-shortcuts + dedupe keeps deduped requests working', async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response('{"ok":true}', { status: 200 }))
+
+    const client = createClient({
+      plugins: [responseShortcutsPlugin(), dedupePlugin()],
+    })
+
+    const p1 = client('https://example.com/shortcuts-dedupe')
+    const p2 = client('https://example.com/shortcuts-dedupe')
+
+    expect(typeof p1.json).toBe('function')
+    expect(typeof p2.text).toBe('function')
+
+    const [r1, r2] = await Promise.all([p1, p2])
+    expect(r1.status).toBe(200)
+    expect(r2.status).toBe(200)
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('response-shortcuts preserves circuit errors through shortcut chaining', async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response('fail', { status: 500 }))
+
+    const client = createClient({
+      retries: 0,
+      plugins: [
+        responseShortcutsPlugin(),
+        circuitPlugin({ threshold: 1, reset: 200 }),
+      ],
+    })
+
+    await expect(
+      client('https://example.com/shortcuts-circuit').json()
+    ).rejects.toBeInstanceOf(CircuitOpenError)
   })
 })

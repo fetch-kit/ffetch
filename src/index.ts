@@ -15,4 +15,5 @@ export {
   AbortError,
   RetryLimitError,
   NetworkError,
+  HttpError,
 } from './error'

@@ -10,6 +10,7 @@ You can inspect the circuit breaker state at runtime using `client.circuitOpen` 
 
 ```typescript
 import { createClient } from '@fetchkit/ffetch'
+import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
 
 const client = createClient({
@@ -45,6 +46,27 @@ const newUser = await api('https://api.example.com/users', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ name: 'John', email: 'john@example.com' }),
 }).then((r) => r.json())
+```
+
+### Request Promise Shortcuts
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
+
+const api = createClient({
+  plugins: [responseShortcutsPlugin()],
+})
+
+const users = await api('https://api.example.com/users').json<
+  Array<{ id: number; name: string }>
+>()
+
+const statusText = await api('https://api.example.com/health').text()
+const fileBlob = await api('https://api.example.com/report.pdf').blob()
+
+// Native behavior is preserved
+const response = await api('https://api.example.com/users')
 ```
 
 ### REST API Client

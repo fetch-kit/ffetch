@@ -172,6 +172,16 @@ const client = createClient({
 ```typescript
 const cache = new Map()
 
+class CacheHitError extends Error {
+  response: Response
+
+  constructor(response: Response) {
+    super('Cache hit')
+    this.name = 'CacheHitError'
+    this.response = response
+  }
+}
+
 const client = createClient({
   hooks: {
     before: async (req) => {

@@ -17,7 +17,41 @@ ffetch can wrap any fetch-compatible implementation (native fetch, node-fetch, u
 
 ffetch uses a plugin architecture for optional features, so you only include what you need.
 
-**Key Features:**
+## Why ffetch
+
+- Keep native fetch ergonomics, add production safety (timeouts, retries, error strategy).
+- Keep your runtime flexibility (use global fetch or any fetch-compatible handler).
+- Keep your bundle lean – **~3kb minified** (optional plugins, zero runtime dependencies).
+
+## Table of Contents
+
+- [@fetchkit/ffetch](#fetchkitffetch)
+  - [Why ffetch](#why-ffetch)
+  - [Table of Contents](#table-of-contents)
+  - [Key Features](#key-features)
+    - [Built-in Plugins at a Glance](#built-in-plugins-at-a-glance)
+  - [What Problems Does ffetch Solve?](#what-problems-does-ffetch-solve)
+  - [Quick Start](#quick-start)
+    - [Install](#install)
+    - [Basic Setup](#basic-setup)
+    - [Production Setup with Plugins](#production-setup-with-plugins)
+    - [Why not only native fetch?](#why-not-only-native-fetch)
+    - [Common Recipes](#common-recipes)
+    - [Using a Custom fetchHandler (SSR, metaframeworks, or polyfills)](#using-a-custom-fetchhandler-ssr-metaframeworks-or-polyfills)
+    - [Advanced Example](#advanced-example)
+    - [Custom Error Handling with `throwOnHttpError`](#custom-error-handling-with-throwonhttperror)
+  - [Documentation](#documentation)
+  - [Environment Requirements](#environment-requirements)
+    - ["AbortSignal.any is not a function"](#abortsignalany-is-not-a-function)
+  - [CDN Usage](#cdn-usage)
+  - [Deduplication Limitations](#deduplication-limitations)
+  - [Fetch vs. Axios vs. ky vs. `ffetch`](#fetch-vs-axios-vs-ky-vs-ffetch)
+    - [Try ffetch in Action](#try-ffetch-in-action)
+  - [Join the Community](#join-the-community)
+  - [Contributing](#contributing)
+  - [License](#license)
+
+## Key Features
 
 - **Timeouts** – per-request or global
 - **Retries** – exponential backoff + jitter
@@ -31,59 +65,155 @@ ffetch uses a plugin architecture for optional features, so you only include wha
 - **Configurable error handling** – custom error types and `throwOnHttpError` flag to throw on HTTP errors
 - **Circuit breaker plugin (optional, prebuilt)** – automatic failure protection
 - **Deduplication plugin (optional, prebuilt)** – automatic deduping of in-flight identical requests
+- **Response shortcuts plugin (optional, prebuilt)** – call `client(url).json()` / `.text()` / `.blob()` directly on the request promise
+
+**Built-in error classes:** `TimeoutError`, `RetryLimitError`, `CircuitOpenError`, `HttpError`, `NetworkError`, `AbortError`
+
+### Built-in Plugins at a Glance
+
+All plugins are tree-shakeable — import only what you use.
+
+- **dedupePlugin (optional)**: dedupe in-flight identical requests.
+- **circuitPlugin (optional)**: fail fast after repeated failures.
+- **responseShortcutsPlugin (optional)**: use `client(url).json()` / `.text()` / `.blob()` style parsing.
+
+## What Problems Does ffetch Solve?
+
+ffetch is ideal for:
+
+- **Microservices and REST APIs** with retry requirements and timeout control
+- **High-traffic client applications** that need in-flight deduplication and circuit breaker protection
+- **SSR and metaframework apps** that require runtime flexibility (custom fetch handlers for different environments)
+- **Type-safe request handling** with strong TypeScript support and zero runtime dependencies
 
 ## Quick Start
 
 ### Install
 
 ```bash
+# npm
 npm install @fetchkit/ffetch
+
+# yarn
+yarn add @fetchkit/ffetch
+
+# pnpm
+pnpm add @fetchkit/ffetch
+
+# bun
+bun add @fetchkit/ffetch
 ```
 
-### Basic Usage
+### Basic Setup
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+
+type User = { id: number; name: string }
+
+const api = createClient({ timeout: 5000, retries: 2 })
+const response = await api('https://api.example.com/users')
+
+if (!response.ok) {
+  throw new Error(`Request failed: ${response.status}`)
+}
+
+const users = (await response.json()) as User[]
+```
+
+### Production Setup with Plugins
 
 ```typescript
 import { createClient } from '@fetchkit/ffetch'
 import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
+import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 
-// Create a client with timeout, retries, and deduplication plugin
 const api = createClient({
-  timeout: 5000,
-  retries: 3,
-  plugins: [dedupePlugin()],
-  retryDelay: ({ attempt }) => 2 ** attempt * 100 + Math.random() * 100,
+  timeout: 10_000,
+  retries: 2,
+  plugins: [
+    // 1) Optional: dedupe identical in-flight requests
+    dedupePlugin({ ttl: 30_000, sweepInterval: 5_000 }),
+    // 2) Optional: open the circuit after repeated failures
+    circuitPlugin({ threshold: 5, reset: 30_000 }),
+    // 3) Optional: enable request-promise parsing shortcuts
+    responseShortcutsPlugin(),
+  ],
 })
 
-// Make requests
-const response = await api('https://api.example.com/users')
-const data = await response.json()
+const users = await api('https://api.example.com/users').json<
+  Array<{ id: number; name: string }>
+>()
 
-// Deduplication example: these two requests will be deduped
 const p1 = api('https://api.example.com/data')
 const p2 = api('https://api.example.com/data')
-const [r1, r2] = await Promise.all([p1, p2])
-// Only one fetch will occur; both promises resolve to the same response
+const [res1, res2] = await Promise.all([p1, p2])
+```
+
+What this setup gives you:
+
+- **Operational safety**: retries with timeout defaults.
+- **Lower duplicate traffic (optional)**: concurrent identical requests share one in-flight call.
+- **Faster failure recovery (optional)**: circuit breaker blocks repeated failing calls.
+- **Cleaner parsing (optional)**: `client(url).json()` style shortcuts.
+
+### Why not only native fetch?
+
+- Native fetch is a great baseline, but production apps usually need retries and timeout control.
+- ffetch keeps the fetch model and adds optional resilience features.
+- You can keep strict native behavior and only opt into plugins you need.
+
+### Common Recipes
+
+```typescript
+// Throw on non-2xx/429 once retries are exhausted
+const strict = createClient({ throwOnHttpError: true })
+
+// Use a custom fetch implementation (SSR/framework/runtime)
+import nodeFetch from 'node-fetch'
+const apiWithCustomHandler = createClient({ fetchHandler: nodeFetch })
+
+// Keep native Response flow (works with or without plugins)
+const plainApi = createClient({ timeout: 5000 })
+const response = await plainApi('https://api.example.com/health')
+const text = await response.text()
 ```
 
 ### Using a Custom fetchHandler (SSR, metaframeworks, or polyfills)
 
 ```typescript
-// Example: SvelteKit, Next.js, Nuxt, or node-fetch
-import { createClient } from '@fetchkit/ffetch'
+// Why this exists:
+// ffetch wraps whatever fetch-compatible function you provide.
+// This is useful when your runtime has a scoped/framework fetch,
+// or when Node needs an explicit fetch implementation.
 
-// Pass your framework's fetch implementation
-const api = createClient({
-  fetchHandler: fetch, // SvelteKit/Next.js/Nuxt provide their own fetch
+import { createClient } from '@fetchkit/ffetch'
+import nodeFetch from 'node-fetch'
+
+// Node.js example: provide node-fetch explicitly
+const apiNode = createClient({
+  fetchHandler: nodeFetch,
   timeout: 5000,
 })
+const nodeResponse = await apiNode('https://api.example.com/data')
 
-// Or use node-fetch/undici in Node.js
-import nodeFetch from 'node-fetch'
-const apiNode = createClient({ fetchHandler: nodeFetch })
+// Framework example: pass the framework-scoped fetch
+// (e.g. the fetch passed into a request handler)
+async function loadData(frameworkFetch: typeof fetch) {
+  const api = createClient({
+    fetchHandler: frameworkFetch,
+    timeout: 5000,
+  })
 
-// All ffetch features work identically
-const response = await api('/api/data')
+  const response = await api('/internal/data')
+  return response.json()
+}
 ```
+
+All ffetch features (timeouts, retries, plugins, hooks) behave the same with a custom `fetchHandler`.
+
+With `responseShortcutsPlugin()` enabled, request-promise shortcuts like `api(url).json()` also work the same.
 
 ### Advanced Example
 
@@ -197,22 +327,29 @@ npm install abort-controller-x
 
 See [deduplication.md](./docs/deduplication.md) for full details.
 
-## Fetch vs. Axios vs. `ffetch`
+## Fetch vs. Axios vs. ky vs. `ffetch`
 
-| Feature              | Native Fetch              | Axios                | ffetch                                                                                 |
-| -------------------- | ------------------------- | -------------------- | -------------------------------------------------------------------------------------- |
-| Timeouts             | ❌ Manual AbortController | ✅ Built-in          | ✅ Built-in with fallbacks                                                             |
-| Retries              | ❌ Manual implementation  | ❌ Manual or plugins | ✅ Smart exponential backoff                                                           |
-| Plugin Architecture  | ❌ Not available          | ⚠️ Interceptors only | ✅ First-class plugin pipeline (optional built-in + custom plugins)                    |
-| Circuit Breaker      | ❌ Not available          | ❌ Manual or plugins | ✅ Automatic failure protection                                                        |
-| Deduplication        | ❌ Not available          | ❌ Not available     | ✅ Automatic deduplication of in-flight identical requests                             |
-| Request Monitoring   | ❌ Manual tracking        | ❌ Manual tracking   | ✅ Built-in pending requests                                                           |
-| Error Types          | ❌ Generic errors         | ⚠️ HTTP errors only  | ✅ Specific error classes                                                              |
-| TypeScript           | ⚠️ Basic types            | ⚠️ Basic types       | ✅ Full type safety                                                                    |
-| Hooks/Middleware     | ❌ Not available          | ✅ Interceptors      | ✅ Comprehensive lifecycle hooks                                                       |
-| Bundle Size          | ✅ Native (0kb)           | ❌ ~13kb minified    | ✅ ~3kb minified                                                                       |
-| Modern APIs          | ✅ Web standards          | ❌ XMLHttpRequest    | ✅ Fetch + modern features                                                             |
-| Custom Fetch Support | ❌ No (global only)       | ❌ No                | ✅ Yes (wrap any fetch-compatible implementation, including framework or custom fetch) |
+| Feature              | Native Fetch                                            | Axios                          | ky                                            | ffetch                                                                                 |
+| -------------------- | ------------------------------------------------------- | ------------------------------ | --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Timeouts             | ❌ Manual AbortController                               | ✅ Built-in                    | ✅ Built-in                                   | ✅ Built-in with fallbacks                                                             |
+| Retries              | ❌ Manual implementation                                | ❌ Manual or plugins           | ✅ Built-in                                   | ✅ Smart exponential backoff                                                           |
+| Response Parsing DX  | ⚠️ Response methods only (`await fetch(...).then(...)`) | ✅ `response.data` convenience | ✅ `.json()/.text()/.blob()` on request chain | ✅ Optional `responseShortcutsPlugin()` (`.json()/.text()/.blob()` on request chain)   |
+| Plugin Architecture  | ❌ Not available                                        | ⚠️ Interceptors only           | ⚠️ Hook-based extensions                      | ✅ First-class plugin pipeline (optional built-in + custom plugins)                    |
+| Circuit Breaker      | ❌ Not available                                        | ❌ Manual or plugins           | ❌ Manual                                     | ✅ Automatic failure protection                                                        |
+| Deduplication        | ❌ Not available                                        | ❌ Not available               | ❌ Not available                              | ✅ Optional via `dedupePlugin()`                                                       |
+| Request Monitoring   | ❌ Manual tracking                                      | ❌ Manual tracking             | ❌ Manual tracking                            | ✅ Built-in pending requests                                                           |
+| Error Types          | ❌ Generic errors                                       | ⚠️ HTTP errors only            | ✅ Specific error classes                     | ✅ Specific error classes                                                              |
+| TypeScript           | ⚠️ Basic types                                          | ⚠️ Basic types                 | ✅ Strong types                               | ✅ Full type safety                                                                    |
+| Hooks/Middleware     | ❌ Not available                                        | ✅ Interceptors                | ✅ Hooks                                      | ✅ Comprehensive lifecycle hooks                                                       |
+| Bundle Size          | ✅ Native (0kb)                                         | ❌ ~13kb minified              | ✅ Lightweight (fetch-based)                  | ✅ ~3kb minified                                                                       |
+| Modern APIs          | ✅ Web standards                                        | ❌ XMLHttpRequest              | ✅ Fetch + modern APIs                        | ✅ Fetch + modern features                                                             |
+| Custom Fetch Support | ❌ No (global only)                                     | ❌ No                          | ❌ No                                         | ✅ Yes (wrap any fetch-compatible implementation, including framework or custom fetch) |
+
+Note: built-in plugins in ffetch are opt-in. Use `dedupePlugin()` for deduplication, `circuitPlugin()` for circuit breaking, and `responseShortcutsPlugin()` for request-promise parsing shortcuts. Bundle size: ~3kb core, additional optional plugin imports are tree-shakeable.
+
+### Try ffetch in Action
+
+Want to see these clients in practice? Check out [ffetch-demo](https://github.com/fetch-kit/ffetch-demo) for working examples and side-by-side comparisons of how ffetch simplifies common fetch patterns.
 
 ## Join the Community
 

@@ -151,3 +151,20 @@ const client = createClient({
 ```
 
 Then add plugins only when needed.
+
+## Optional: Request Promise Shortcuts Plugin
+
+v5.0.0 also includes an optional response shortcuts plugin for promise-chain parsing.
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
+
+const client = createClient({
+  plugins: [responseShortcutsPlugin()],
+})
+
+const users = await client('https://api.example.com/users').json()
+```
+
+This is opt-in and does not change default behavior for clients that do not install the plugin.

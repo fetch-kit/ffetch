@@ -168,7 +168,16 @@ const client = createClient({
 
 ### Retry-After Header Support
 
-By default, if the server responds with a `Retry-After` header (either in seconds or as a date), `ffetch` will honor it and use it as the delay before the next retry. This behavior is built into the default retry logic and can be customized via the `retryDelay` option.
+By default, if the server responds with a `Retry-After` header (either in seconds or as a date), `ffetch` will honor it and use it as the delay before the next retry.
+
+Important distinction:
+
+- `shouldRetry` decides **whether** a retry should happen.
+- `retryDelay` decides **when** that retry runs.
+
+`Retry-After` is applied in delay timing (via retry delay behavior), not as a separate retry decision trigger.
+
+If you override retry behavior, make sure your custom logic still handles `Retry-After` semantics if you want that behavior.
 
 ```typescript
 // The server sends: Retry-After: 30

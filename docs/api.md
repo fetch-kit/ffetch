@@ -16,6 +16,7 @@ import {
   dedupeRequestHash,
 } from '@fetchkit/ffetch/plugins/dedupe'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 ```
 
 Custom plugin authoring is documented in [plugins.md](./plugins.md).
@@ -88,6 +89,28 @@ if (client.circuitOpen) {
 }
 ```
 
+#### Response Shortcuts Plugin
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
+
+const client = createClient({
+  plugins: [responseShortcutsPlugin()],
+})
+
+const data = await client('https://api.example.com/users').json<
+  Array<{ id: number; name: string }>
+>()
+const html = await client('https://example.com/page').text()
+```
+
+Notes:
+
+- The plugin is opt-in; default `createClient()` behavior is unchanged.
+- `await client(url)` still returns a native `Response`.
+- Shortcut methods are available on the returned request promise: `json`, `text`, `blob`, `arrayBuffer`, `formData`.
+
 ### Custom Plugins
 
 Use the public plugin types from the root package and register your plugins via `plugins`.
@@ -147,6 +170,20 @@ type FFetch = {
   abortAll: () => void
   // Plugin extensions are composed into this type
 }
+```
+
+When the response shortcuts plugin is installed, the call return value is augmented with shortcut methods while preserving `await client(url)` as `Response`.
+
+```typescript
+const client = createClient({
+  plugins: [responseShortcutsPlugin()] as const,
+})
+
+// Promise<Response> + shortcut methods
+const data = await client('https://example.com/data').json<{ ok: boolean }>()
+
+// Native behavior still works
+const response = await client('https://example.com/data')
 ```
 
 ### Default Values
