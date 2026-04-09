@@ -36,6 +36,11 @@
       "types": "./dist/plugins/circuit.d.ts",
       "import": "./dist/plugins/circuit.js",
       "require": "./dist/plugins/circuit.cjs"
+    },
+    "./plugins/response-shortcuts": {
+      "types": "./dist/plugins/response-shortcuts.d.ts",
+      "import": "./dist/plugins/response-shortcuts.js",
+      "require": "./dist/plugins/response-shortcuts.cjs"
     }
   },
   "files": [

@@ -10,14 +10,39 @@ From version 5 ffetch uses a plugin pipeline for optional behavior such as dedup
 
 ## Lifecycle Overview
 
-Plugins can hook into request execution at multiple phases:
+Plugins run in a deterministic pipeline with two phases:
 
-1. `setup` (once, at client creation): register client extensions.
-2. `preRequest` (per request, before dispatch): validate or prepare request context.
-3. `wrapDispatch` (per request): wrap the network dispatch function.
-4. `onSuccess` (per request): run after successful completion.
-5. `onError` (per request): run after failure.
-6. `onFinally` (per request): always run when request settles.
+1. **Client creation phase**
+
+- `setup`: runs once when `createClient()` is called. Use it to define client extensions.
+
+2. **Request phase (runs for every request)**
+
+- `preRequest`: runs before dispatch. Use it to validate, prepare, or fail fast.
+- `wrapDispatch`: wraps request execution (`before` / `after` around `next(ctx)`).
+- `decoratePromise`: runs when the request promise is created, before it is returned to the caller.
+- `onSuccess` / `onError`: runs when the request settles.
+- `onFinally`: always runs after success or error.
+
+### Per-request Timeline
+
+For one request, the flow is:
+
+1. Build request context.
+2. Run `preRequest` hooks.
+3. Run composed `wrapDispatch` chain.
+4. Create the request promise and pass it through `decoratePromise`.
+5. Return the (possibly decorated) promise to the caller.
+6. Later, when it settles, run `onSuccess` **or** `onError`.
+7. Run `onFinally`.
+
+### What Each Hook Is For
+
+- `preRequest`: prepare request context (auth, validation, early abort).
+- `wrapDispatch`: control execution around the network call.
+- `decoratePromise`: improve caller ergonomics (for example, add `.json()`).
+- `onSuccess` / `onError`: record outcomes, metrics, and side effects.
+- `onFinally`: cleanup that must always happen.
 
 ## Plugin Order
 
@@ -26,19 +51,36 @@ Execution order is deterministic:
 - Plugins are sorted by `order` (ascending).
 - For equal `order`, registration order is preserved.
 
+Order details per hook:
+
+- `preRequest`, `onSuccess`, `onError`, `onFinally`, `decoratePromise`: run in sorted order.
+- `wrapDispatch`: composed in reverse to create nested wrappers. In practice, lower `order` wraps outermost (`before` runs first, `after` runs last).
+
 ## Built-in Feature Plugins
 
 ```typescript
 import { createClient } from '@fetchkit/ffetch'
 import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 
 const client = createClient({
   plugins: [
     dedupePlugin({ ttl: 30_000, sweepInterval: 5_000 }),
     circuitPlugin({ threshold: 5, reset: 30_000 }),
+    responseShortcutsPlugin(),
   ],
 })
+```
+
+The response shortcuts plugin adds convenience methods on the request promise:
+
+```typescript
+const client = createClient({
+  plugins: [responseShortcutsPlugin()],
+})
+
+const data = await client('https://example.com/users').json()
 ```
 
 ## Writing a Custom Plugin
@@ -121,6 +163,32 @@ const tracingPlugin: ClientPlugin = {
       console.log('error', error)
       throw error
     }
+  },
+}
+```
+
+## Decorating the Returned Promise
+
+Use `decoratePromise` to attach convenience behavior to the returned promise without replacing native `Response` behavior.
+
+```typescript
+import type { ClientPlugin } from '@fetchkit/ffetch'
+
+const jsonShortcutPlugin: ClientPlugin<
+  Record<never, never>,
+  { json: () => Promise<unknown> }
+> = {
+  name: 'json-shortcut',
+  decoratePromise: (promise) => {
+    Object.defineProperty(promise, 'json', {
+      value: function json(this: Promise<Response>) {
+        return this.then((response) => response.json())
+      },
+      enumerable: false,
+      writable: false,
+      configurable: false,
+    })
+    return promise as Promise<Response> & { json: () => Promise<unknown> }
   },
 }
 ```

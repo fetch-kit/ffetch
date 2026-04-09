@@ -2,6 +2,7 @@
 // These are part of the public API for first-party and third-party plugins.
 export type PluginState = Record<string, unknown>
 export type PluginExtensionBase = Record<PropertyKey, unknown>
+export type PluginRequestPromiseExtensionBase = Record<PropertyKey, unknown>
 
 type UnionToIntersection<U> = (
   U extends unknown ? (arg: U) => void : never
@@ -12,9 +13,24 @@ type UnionToIntersection<U> = (
 export type PluginExtensionOf<P> =
   P extends ClientPlugin<infer TExtension> ? TExtension : Record<never, never>
 
+export type PluginRequestPromiseExtensionOf<P> =
+  P extends ClientPlugin<PluginExtensionBase, infer TRequestPromiseExtension>
+    ? TRequestPromiseExtension
+    : Record<never, never>
+
 export type PluginExtensions<
   TPlugins extends readonly ClientPlugin<PluginExtensionBase>[],
 > = Extract<UnionToIntersection<PluginExtensionOf<TPlugins[number]>>, object>
+
+export type PluginRequestPromiseExtensions<
+  TPlugins extends readonly ClientPlugin<
+    PluginExtensionBase,
+    PluginRequestPromiseExtensionBase
+  >[],
+> = Extract<
+  UnionToIntersection<PluginRequestPromiseExtensionOf<TPlugins[number]>>,
+  object
+>
 
 export type PluginSetupContext<
   TExtension extends PluginExtensionBase = Record<never, never>,
@@ -68,12 +84,19 @@ export type PluginDispatch = (ctx: PluginRequestContext) => Promise<Response>
 
 export type ClientPlugin<
   TExtension extends PluginExtensionBase = Record<never, never>,
+  TRequestPromiseExtension extends PluginRequestPromiseExtensionBase = Record<
+    never,
+    never
+  >,
 > = {
   name: string
   order?: number
   setup?: (ctx: PluginSetupContext<TExtension>) => void
   preRequest?: (ctx: PluginRequestContext) => void | Promise<void>
   wrapDispatch?: (next: PluginDispatch) => PluginDispatch
+  decoratePromise?: (
+    promise: Promise<Response>
+  ) => Promise<Response> & TRequestPromiseExtension
   onSuccess?: (
     ctx: PluginRequestContext,
     response: Response
