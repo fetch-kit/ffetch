@@ -1,5 +1,12 @@
 # ffetch
 
+## 5.1.1
+
+### Patch Changes
+
+- 77f6e07: Changed
+  - Replaced string-based decoration marker with a Symbol in responseShortcutsPlugin to eliminate any possibility of key collision with third-party code
+
 ## 5.1.0
 
 ### Minor Changes
