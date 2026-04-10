@@ -351,9 +351,10 @@ See [deduplication.md](./docs/deduplication.md) for full details.
 | Hooks/Middleware     | ❌ Not available                                        | ✅ Interceptors                | ✅ Hooks                                      | ✅ Comprehensive lifecycle hooks                                                       |
 | Bundle Size          | ✅ Native (0kb)                                         | ❌ ~13kb minified              | ✅ Lightweight (fetch-based)                  | ✅ ~3kb minified                                                                       |
 | Modern APIs          | ✅ Web standards                                        | ❌ XMLHttpRequest              | ✅ Fetch + modern APIs                        | ✅ Fetch + modern features                                                             |
+| Download Progress    | ❌ Manual ReadableStream                                | ❌ Manual                      | ✅ `onDownloadProgress` callback              | ✅ Optional via `downloadProgressPlugin()`                                             |
 | Custom Fetch Support | ❌ No (global only)                                     | ❌ No                          | ❌ No                                         | ✅ Yes (wrap any fetch-compatible implementation, including framework or custom fetch) |
 
-Note: built-in plugins in ffetch are opt-in. Use `dedupePlugin()` for deduplication, `circuitPlugin()` for circuit breaking, `requestShortcutsPlugin()` for client HTTP method shortcuts, and `responseShortcutsPlugin()` for request-promise parsing shortcuts. Bundle size: ~3kb core, additional optional plugin imports are tree-shakeable.
+Note: built-in plugins in ffetch are opt-in. Use `dedupePlugin()` for deduplication, `circuitPlugin()` for circuit breaking, `requestShortcutsPlugin()` for client HTTP method shortcuts, `responseShortcutsPlugin()` for request-promise parsing shortcuts, and `downloadProgressPlugin()` for streaming download progress. Bundle size: ~3kb core, additional optional plugin imports are tree-shakeable.
 
 ### Try ffetch in Action
 
