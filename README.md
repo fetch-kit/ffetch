@@ -67,6 +67,7 @@ ffetch uses a plugin architecture for optional features, so you only include wha
 - **Deduplication plugin (optional, prebuilt)** – automatic deduping of in-flight identical requests
 - **Request shortcuts plugin (optional, prebuilt)** – call `client.get(url)` / `.post()` / `.put()` / `.patch()` / `.delete()` directly on the client
 - **Response shortcuts plugin (optional, prebuilt)** – call `client(url).json()` / `.text()` / `.blob()` directly on the request promise
+- **Download progress plugin (optional, prebuilt)** – stream download progress callbacks with bytes transferred and percentage
 
 **Built-in error classes:** `TimeoutError`, `RetryLimitError`, `CircuitOpenError`, `HttpError`, `NetworkError`, `AbortError`
 
@@ -78,6 +79,7 @@ All plugins are tree-shakeable — import only what you use.
 - **circuitPlugin (optional)**: fail fast after repeated failures.
 - **requestShortcutsPlugin (optional)**: HTTP method shortcuts on the client (`.get()` / `.post()` / `.put()` / `.patch()` / `.delete()` / `.head()` / `.options()`).
 - **responseShortcutsPlugin (optional)**: use `client(url).json()` / `.text()` / `.blob()` style parsing.
+- **downloadProgressPlugin (optional)**: stream download progress via `onProgress(progress, chunk)` callback.
 
 ## What Problems Does ffetch Solve?
 

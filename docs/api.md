@@ -18,6 +18,7 @@ import {
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
 import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
 import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
+import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progress'
 ```
 
 Custom plugin authoring is documented in [plugins.md](./plugins.md).
@@ -135,7 +136,38 @@ Notes:
 - `await client(url)` still returns a native `Response`.
 - Shortcut methods are available on the returned request promise: `json`, `text`, `blob`, `arrayBuffer`, `formData`.
 
-### Custom Plugins
+#### Download Progress Plugin
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progress'
+
+const client = createClient({
+  plugins: [
+    downloadProgressPlugin((progress, chunk) => {
+      console.log(
+        `${(progress.percent * 100).toFixed(1)}% — ${progress.transferredBytes} bytes`
+      )
+    }),
+  ],
+})
+
+const response = await client('https://example.com/large-file.zip')
+await response.arrayBuffer() // drain the stream
+```
+
+The `onProgress` callback receives:
+
+- `progress.percent` — fraction from `0` to `1`. Always `0` when `Content-Length` is absent.
+- `progress.transferredBytes` — cumulative bytes received so far.
+- `progress.totalBytes` — value of `Content-Length` header, or `0` if absent.
+- `chunk` — the raw `Uint8Array` chunk just received.
+
+Notes:
+
+- The plugin is opt-in; default `createClient()` behavior is unchanged.
+- The response body is fully stream-passthrough — callers can still read `.json()`, `.text()`, `.blob()`, or `.arrayBuffer()` as normal.
+- If the response has no body (e.g. `204 No Content`), `onProgress` is never called and the original response is returned unchanged.
 
 Use the public plugin types from the root package and register your plugins via `plugins`.
 

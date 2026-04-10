@@ -90,6 +90,55 @@ const createdResponse = await api.post('https://api.example.com/users', {
 const createdUser = await createdResponse.json()
 ```
 
+### Download Progress
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progress'
+
+const client = createClient({
+  plugins: [
+    downloadProgressPlugin((progress, _chunk) => {
+      const pct = (progress.percent * 100).toFixed(1).padStart(5)
+      const transferred = (progress.transferredBytes / 1_048_576).toFixed(2)
+      const total =
+        progress.totalBytes > 0
+          ? `/ ${(progress.totalBytes / 1_048_576).toFixed(2)} MB`
+          : 'MB (size unknown)'
+      process.stdout.write(`\r  ${pct}%  ${transferred} ${total}  `)
+    }),
+  ],
+})
+
+const response = await client('https://example.com/large-file.zip')
+await response.arrayBuffer() // drain the body — progress fires per chunk
+
+console.log('\nDownload complete.')
+```
+
+The `chunk` parameter lets you process bytes incrementally without buffering the full response:
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progress'
+import { createHash } from 'node:crypto'
+
+const hash = createHash('sha256')
+
+const client = createClient({
+  plugins: [
+    downloadProgressPlugin((_progress, chunk) => {
+      hash.update(chunk)
+    }),
+  ],
+})
+
+const response = await client('https://example.com/release.tar.gz')
+await response.arrayBuffer()
+
+console.log('SHA-256:', hash.digest('hex'))
+```
+
 ### REST API Client
 
 ```typescript

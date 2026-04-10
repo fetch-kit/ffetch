@@ -8,6 +8,7 @@ export default defineConfig([
       'src/plugins/circuit.ts',
       'src/plugins/response-shortcuts.ts',
       'src/plugins/request-shortcuts.ts',
+      'src/plugins/download-progress.ts',
     ],
     format: ['esm', 'cjs'],
     dts: true,

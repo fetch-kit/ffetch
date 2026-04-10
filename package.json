@@ -46,6 +46,11 @@
       "types": "./dist/plugins/request-shortcuts.d.ts",
       "import": "./dist/plugins/request-shortcuts.js",
       "require": "./dist/plugins/request-shortcuts.cjs"
+    },
+    "./plugins/download-progress": {
+      "types": "./dist/plugins/download-progress.d.ts",
+      "import": "./dist/plugins/download-progress.js",
+      "require": "./dist/plugins/download-progress.cjs"
     }
   },
   "files": [

@@ -64,6 +64,7 @@ import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
 import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
 import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
+import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progress'
 
 const client = createClient({
   plugins: [
@@ -71,6 +72,9 @@ const client = createClient({
     circuitPlugin({ threshold: 5, reset: 30_000 }),
     requestShortcutsPlugin(),
     responseShortcutsPlugin(),
+    downloadProgressPlugin((progress) => {
+      console.log(`${(progress.percent * 100).toFixed(1)}%`)
+    }),
   ],
 })
 ```
