@@ -1,5 +1,12 @@
 # ffetch
 
+## 5.2.1
+
+### Patch Changes
+
+- 434c2f3: Documentation
+  - Feature matrix updated in Readme
+
 ## 5.2.0
 
 ### Minor Changes
