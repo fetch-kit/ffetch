@@ -10,8 +10,10 @@ export type ResponseShortcuts = {
 
 type ResponseShortcutsPromise = Promise<Response> & ResponseShortcuts
 
+const DECORATED = Symbol('ffetch.responseShortcutsDecorated')
+
 type DecoratedPromise = ResponseShortcutsPromise & {
-  __ffetchResponseShortcutsDecorated__?: true
+  [DECORATED]?: true
 }
 
 function attachResponseShortcuts(
@@ -19,7 +21,7 @@ function attachResponseShortcuts(
 ): ResponseShortcutsPromise {
   const decorated = promise as DecoratedPromise
 
-  if (decorated.__ffetchResponseShortcutsDecorated__) {
+  if (decorated[DECORATED]) {
     return decorated
   }
 
@@ -64,7 +66,7 @@ function attachResponseShortcuts(
       enumerable: false,
       configurable: false,
     },
-    __ffetchResponseShortcutsDecorated__: {
+    [DECORATED]: {
       value: true,
       writable: false,
       enumerable: false,
