@@ -7,6 +7,7 @@ export default defineConfig([
       'src/plugins/dedupe.ts',
       'src/plugins/circuit.ts',
       'src/plugins/response-shortcuts.ts',
+      'src/plugins/request-shortcuts.ts',
     ],
     format: ['esm', 'cjs'],
     dts: true,

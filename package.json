@@ -41,6 +41,11 @@
       "types": "./dist/plugins/response-shortcuts.d.ts",
       "import": "./dist/plugins/response-shortcuts.js",
       "require": "./dist/plugins/response-shortcuts.cjs"
+    },
+    "./plugins/request-shortcuts": {
+      "types": "./dist/plugins/request-shortcuts.d.ts",
+      "import": "./dist/plugins/request-shortcuts.js",
+      "require": "./dist/plugins/request-shortcuts.cjs"
     }
   },
   "files": [

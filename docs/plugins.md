@@ -62,18 +62,34 @@ Order details per hook:
 import { createClient } from '@fetchkit/ffetch'
 import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
 import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 
 const client = createClient({
   plugins: [
     dedupePlugin({ ttl: 30_000, sweepInterval: 5_000 }),
     circuitPlugin({ threshold: 5, reset: 30_000 }),
+    requestShortcutsPlugin(),
     responseShortcutsPlugin(),
   ],
 })
 ```
 
-The response shortcuts plugin adds convenience methods on the request promise:
+The request shortcuts plugin adds HTTP method shortcuts on the client instance:
+
+```typescript
+const client = createClient({
+  plugins: [requestShortcutsPlugin()],
+})
+
+const usersResponse = await client.get('https://example.com/users')
+const createResponse = await client.post('https://example.com/users', {
+  body: JSON.stringify({ name: 'Alice' }),
+  headers: { 'content-type': 'application/json' },
+})
+```
+
+The response shortcuts plugin adds parsing convenience methods on the returned request promise:
 
 ```typescript
 const client = createClient({

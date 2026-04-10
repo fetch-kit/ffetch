@@ -16,7 +16,7 @@
 ### **Plugin Architecture**
 
 - **[plugins.md](./plugins.md)** - Plugin lifecycle, ordering, custom plugin authoring
-  - Built-in feature plugins (`dedupe`, `circuit`, `response-shortcuts`)
+  - Built-in feature plugins (`dedupe`, `circuit`, `request-shortcuts`, `response-shortcuts`)
   - Writing and registering custom plugins
   - Public plugin types and extension patterns
 
@@ -93,6 +93,7 @@
 | Transform requests/responses                     | [hooks.md](./hooks.md#requestresponse-transformation)        |
 | Handle rate limiting                             | [examples.md](./examples.md#rate-limiting-and-backpressure)  |
 | Cache responses                                  | [examples.md](./examples.md#caching-with-ttl)                |
+| Use `client.get()` / `client.post()` shortcuts   | [api.md](./api.md#request-shortcuts-plugin)                  |
 | Use `client(url).json()` style shortcuts         | [api.md](./api.md#response-shortcuts-plugin)                 |
 
 ## **Key Concepts**

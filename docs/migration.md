@@ -133,6 +133,10 @@ const client = createClient({ plugins })
 2. Add plugin imports from:
    - `@fetchkit/ffetch/plugins/dedupe`
    - `@fetchkit/ffetch/plugins/circuit`
+
+- `@fetchkit/ffetch/plugins/request-shortcuts` (optional)
+- `@fetchkit/ffetch/plugins/response-shortcuts` (optional)
+
 3. Move dedupe and circuit config into `plugins: [...]`.
 4. Move circuit callbacks from `hooks` into `circuitPlugin(...)` options.
 5. Run tests and verify no legacy options remain.
@@ -152,7 +156,28 @@ const client = createClient({
 
 Then add plugins only when needed.
 
-## Optional: Request Promise Shortcuts Plugin
+## Optional: Convenience Shortcuts Plugins
+
+### Client HTTP Method Shortcuts
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
+
+const client = createClient({
+  plugins: [requestShortcutsPlugin()],
+})
+
+const usersResponse = await client.get('https://api.example.com/users')
+const createdResponse = await client.post('https://api.example.com/users', {
+  body: JSON.stringify({ name: 'Alice' }),
+  headers: { 'content-type': 'application/json' },
+})
+```
+
+This plugin is opt-in and adds `get` / `post` / `put` / `patch` / `delete` / `head` / `options` methods to the client.
+
+### Request Promise Parsing Shortcuts
 
 v5.0.0 also includes an optional response shortcuts plugin for promise-chain parsing.
 

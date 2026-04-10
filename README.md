@@ -65,6 +65,7 @@ ffetch uses a plugin architecture for optional features, so you only include wha
 - **Configurable error handling** – custom error types and `throwOnHttpError` flag to throw on HTTP errors
 - **Circuit breaker plugin (optional, prebuilt)** – automatic failure protection
 - **Deduplication plugin (optional, prebuilt)** – automatic deduping of in-flight identical requests
+- **Request shortcuts plugin (optional, prebuilt)** – call `client.get(url)` / `.post()` / `.put()` / `.patch()` / `.delete()` directly on the client
 - **Response shortcuts plugin (optional, prebuilt)** – call `client(url).json()` / `.text()` / `.blob()` directly on the request promise
 
 **Built-in error classes:** `TimeoutError`, `RetryLimitError`, `CircuitOpenError`, `HttpError`, `NetworkError`, `AbortError`
@@ -75,6 +76,7 @@ All plugins are tree-shakeable — import only what you use.
 
 - **dedupePlugin (optional)**: dedupe in-flight identical requests.
 - **circuitPlugin (optional)**: fail fast after repeated failures.
+- **requestShortcutsPlugin (optional)**: HTTP method shortcuts on the client (`.get()` / `.post()` / `.put()` / `.patch()` / `.delete()` / `.head()` / `.options()`).
 - **responseShortcutsPlugin (optional)**: use `client(url).json()` / `.text()` / `.blob()` style parsing.
 
 ## What Problems Does ffetch Solve?
@@ -127,6 +129,7 @@ const users = (await response.json()) as User[]
 import { createClient } from '@fetchkit/ffetch'
 import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
 import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 
 const api = createClient({
@@ -139,12 +142,14 @@ const api = createClient({
     circuitPlugin({ threshold: 5, reset: 30_000 }),
     // 3) Optional: enable request-promise parsing shortcuts
     responseShortcutsPlugin(),
+    // 4) Optional: enable client HTTP method shortcuts
+    requestShortcutsPlugin(),
   ],
 })
 
-const users = await api('https://api.example.com/users').json<
-  Array<{ id: number; name: string }>
->()
+const users = await api
+  .get('https://api.example.com/users')
+  .json<Array<{ id: number; name: string }>>()
 
 const p1 = api('https://api.example.com/data')
 const p2 = api('https://api.example.com/data')
@@ -156,6 +161,7 @@ What this setup gives you:
 - **Operational safety**: retries with timeout defaults.
 - **Lower duplicate traffic (optional)**: concurrent identical requests share one in-flight call.
 - **Faster failure recovery (optional)**: circuit breaker blocks repeated failing calls.
+- **Cleaner request ergonomics (optional)**: `client.get(url)` / `.post(url, init)` style shortcuts.
 - **Cleaner parsing (optional)**: `client(url).json()` style shortcuts.
 
 ### Why not only native fetch?
@@ -345,7 +351,7 @@ See [deduplication.md](./docs/deduplication.md) for full details.
 | Modern APIs          | ✅ Web standards                                        | ❌ XMLHttpRequest              | ✅ Fetch + modern APIs                        | ✅ Fetch + modern features                                                             |
 | Custom Fetch Support | ❌ No (global only)                                     | ❌ No                          | ❌ No                                         | ✅ Yes (wrap any fetch-compatible implementation, including framework or custom fetch) |
 
-Note: built-in plugins in ffetch are opt-in. Use `dedupePlugin()` for deduplication, `circuitPlugin()` for circuit breaking, and `responseShortcutsPlugin()` for request-promise parsing shortcuts. Bundle size: ~3kb core, additional optional plugin imports are tree-shakeable.
+Note: built-in plugins in ffetch are opt-in. Use `dedupePlugin()` for deduplication, `circuitPlugin()` for circuit breaking, `requestShortcutsPlugin()` for client HTTP method shortcuts, and `responseShortcutsPlugin()` for request-promise parsing shortcuts. Bundle size: ~3kb core, additional optional plugin imports are tree-shakeable.
 
 ### Try ffetch in Action
 

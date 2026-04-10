@@ -49,6 +49,7 @@ const client = createClient({
 ## Behavior Notes
 
 - Deduplication is off unless the plugin is installed.
+- The dedupe key is computed from the original request init/body before dispatch; if `transformRequest` changes request identity, use a custom `hashFn` that reflects the final semantics you need.
 - TTL eviction only removes in-flight dedupe keys from the map.
 - TTL eviction does not reject already in-flight request promises.
 - Stream/FormData request bodies are skipped by the default hash strategy.

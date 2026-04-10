@@ -10,7 +10,6 @@ You can inspect the circuit breaker state at runtime using `client.circuitOpen` 
 
 ```typescript
 import { createClient } from '@fetchkit/ffetch'
-import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
 
 const client = createClient({
@@ -48,7 +47,7 @@ const newUser = await api('https://api.example.com/users', {
 }).then((r) => r.json())
 ```
 
-### Request Promise Shortcuts
+### Response Promise Shortcuts
 
 ```typescript
 import { createClient } from '@fetchkit/ffetch'
@@ -67,6 +66,28 @@ const fileBlob = await api('https://api.example.com/report.pdf').blob()
 
 // Native behavior is preserved
 const response = await api('https://api.example.com/users')
+```
+
+### HTTP Method Shortcuts
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
+
+const api = createClient({
+  timeout: 10000,
+  retries: 2,
+  plugins: [requestShortcutsPlugin()],
+})
+
+const usersResponse = await api.get('https://api.example.com/users')
+const users = await usersResponse.json()
+
+const createdResponse = await api.post('https://api.example.com/users', {
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ name: 'John', email: 'john@example.com' }),
+})
+const createdUser = await createdResponse.json()
 ```
 
 ### REST API Client

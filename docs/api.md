@@ -16,6 +16,7 @@ import {
   dedupeRequestHash,
 } from '@fetchkit/ffetch/plugins/dedupe'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
 import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 ```
 
@@ -88,6 +89,29 @@ if (client.circuitOpen) {
   console.warn('Circuit breaker is open')
 }
 ```
+
+#### Request Shortcuts Plugin
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
+
+const client = createClient({
+  plugins: [requestShortcutsPlugin()],
+})
+
+const users = await client.get('https://api.example.com/users')
+const created = await client.post('https://api.example.com/users', {
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ name: 'Alice' }),
+})
+```
+
+Notes:
+
+- The plugin is opt-in; default `createClient()` behavior is unchanged.
+- Shortcut methods are available on the client instance: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`.
+- Each shortcut is equivalent to `client(url, { ...init, method: 'METHOD' })`.
 
 #### Response Shortcuts Plugin
 
@@ -166,13 +190,23 @@ await client('https://example.com/data', {
 ```typescript
 type FFetch = {
   (input: RequestInfo | URL, init?: RequestInit): Promise<Response>
+  // Available when requestShortcutsPlugin() is installed
+  get?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+  post?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+  put?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+  patch?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+  delete?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+  head?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+  options?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
   pendingRequests: PendingRequest[]
   abortAll: () => void
   // Plugin extensions are composed into this type
 }
 ```
 
-When the response shortcuts plugin is installed, the call return value is augmented with shortcut methods while preserving `await client(url)` as `Response`.
+When the request shortcuts plugin is installed, the client instance is augmented with HTTP method shortcuts (for example `client.get(url)` and `client.post(url, init)`).
+
+When the response shortcuts plugin is installed, the call return value is augmented with parsing shortcuts while preserving `await client(url)` as `Response`.
 
 ```typescript
 const client = createClient({
