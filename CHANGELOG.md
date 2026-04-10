@@ -1,5 +1,12 @@
 # ffetch
 
+## 5.2.0
+
+### Minor Changes
+
+- 8543a59: Added
+  - downloadProgressPlugin with streaming progress callbacks
+
 ## 5.1.1
 
 ### Patch Changes
