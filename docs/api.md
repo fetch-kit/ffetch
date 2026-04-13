@@ -52,6 +52,8 @@ const client = createClient({
 | `fetchHandler`     | `(input: RequestInfo \| URL, init?: RequestInit) => Promise<Response>`                                     | `global fetch`                      | Custom fetch-compatible implementation to wrap.                                       |
 | `plugins`          | `ClientPlugin[]`                                                                                           | `[]`                                | Optional plugin list. Use this for dedupe, circuit breaker, and third-party features. |
 
+For advanced retry behavior (including `Retry-After` handling and custom delay/decision strategies), see [advanced.md -> Retry Strategies and Backoff](./advanced.md#retry-strategies-and-backoff).
+
 ### Plugin Features
 
 #### Deduplication Plugin

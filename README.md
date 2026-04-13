@@ -96,6 +96,8 @@ ffetch is ideal for:
 
 ## Quick Start
 
+Migrating from v4? Start with the [migration guide](./docs/migration.md) before applying the examples below.
+
 ### Install
 
 ```bash
@@ -248,8 +250,10 @@ const client = createClient({
     circuitPlugin({
       threshold: 5,
       reset: 30_000,
-      onCircuitOpen: (req) => console.warn('Circuit opened due to:', req.url),
-      onCircuitClose: (req) => console.info('Circuit closed after:', req.url),
+      onCircuitOpen: ({ request, reason }) =>
+        console.warn('Circuit opened due to:', request.url, reason.type),
+      onCircuitClose: ({ request, response }) =>
+        console.info('Circuit closed after:', request.url, response.status),
     }),
   ],
   hooks: {

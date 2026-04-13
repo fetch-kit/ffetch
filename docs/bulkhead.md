@@ -4,6 +4,8 @@
 
 This is useful when a single dependency gets slow and you want controlled backpressure instead of unbounded fan-out.
 
+For the canonical option/type reference, see [api.md -> Bulkhead Plugin](./api.md#bulkhead-plugin).
+
 ## Import
 
 ```typescript

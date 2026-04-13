@@ -22,6 +22,8 @@ Use this guide if your v4 code uses any of these options:
 
 ### Before (v4)
 
+> This section is historical v4 syntax for comparison only. Do not copy these snippets into v5 code.
+
 ```typescript
 import createClient from '@fetchkit/ffetch'
 ```
@@ -103,8 +105,10 @@ const client = createClient({
     circuitPlugin({
       threshold: 5,
       reset: 30_000,
-      onCircuitOpen: (req) => console.warn('Circuit opened:', req.url),
-      onCircuitClose: (req) => console.info('Circuit closed:', req.url),
+      onCircuitOpen: ({ request, reason }) =>
+        console.warn('Circuit opened:', request.url, reason.type),
+      onCircuitClose: ({ request, response }) =>
+        console.info('Circuit closed:', request.url, response.status),
     }),
   ],
 })

@@ -2,6 +2,8 @@
 
 Deduplication is provided as an optional plugin.
 
+For the canonical option/type reference, see [api.md -> Deduplication Plugin](./api.md#deduplication-plugin).
+
 ## Import
 
 ```typescript

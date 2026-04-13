@@ -301,15 +301,15 @@ const client = createClient({
 
 ### onCircuitOpen
 
-Called when the circuit opens after consecutive failures, and also when a request is blocked while the circuit is already open. Receives the request associated with that event.
+Called when the circuit opens after consecutive failures, and also when a request is blocked while the circuit is already open. Receives a context with the request and open reason.
 
-Signature: `(req: Request) => void | Promise<void>`
+Signature: `(ctx: { request: Request; reason: { type: 'threshold-reached' | 'already-open'; response?: Response; error?: unknown } }) => void | Promise<void>`
 
 ### onCircuitClose
 
-Called when the circuit transitions to closed after a successful request. Receives the request that closed the circuit.
+Called when the circuit transitions to closed after a successful request. Receives a context with the request and the successful recovery response.
 
-Signature: `(req: Request) => void | Promise<void>`
+Signature: `(ctx: { request: Request; response: Response }) => void | Promise<void>`
 
 ### Example
 
@@ -322,8 +322,10 @@ const client = createClient({
     circuitPlugin({
       threshold: 2,
       reset: 1000,
-      onCircuitOpen: (req) => console.warn('Circuit opened due to:', req.url),
-      onCircuitClose: (req) => console.info('Circuit closed after:', req.url),
+      onCircuitOpen: ({ request, reason }) =>
+        console.warn('Circuit opened due to:', request.url, reason.type),
+      onCircuitClose: ({ request, response }) =>
+        console.info('Circuit closed after:', request.url, response.status),
     }),
   ],
 })

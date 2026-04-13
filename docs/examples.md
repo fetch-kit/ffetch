@@ -26,6 +26,8 @@ if (client.circuitOpen) {
 
 // `client.circuitOpen` is available when `circuitPlugin(...)` is installed on the client.
 
+For deeper circuit behavior and callback semantics, see [advanced.md -> Circuit Breaker Pattern](./advanced.md#circuit-breaker-pattern).
+
 ### Simple HTTP Client
 
 ```typescript
@@ -256,6 +258,8 @@ const mockPosts = () =>
 const postsResponse = await client2('/api/posts', { fetchHandler: mockPosts })
 // Returns: [{ id: 1, title: 'Hello' }]
 ```
+
+See [advanced.md -> Per-request Overrides](./advanced.md#per-request-overrides) for a full list of options you can override per request.
 
 ## Advanced Patterns
 

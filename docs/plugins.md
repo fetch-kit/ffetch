@@ -58,28 +58,91 @@ Order details per hook:
 
 ## Built-in Feature Plugins
 
+The sections below are grouped by learning priority (convenience first, resilience second), not by runtime execution order. For execution order semantics, see [Plugin Order](#plugin-order).
+
+| Category    | Plugins                                                                       |
+| ----------- | ----------------------------------------------------------------------------- |
+| Convenience | `requestShortcutsPlugin`, `responseShortcutsPlugin`, `downloadProgressPlugin` |
+| Resilience  | `dedupePlugin`, `circuitPlugin`, `bulkheadPlugin`, `hedgePlugin`              |
+
 ```typescript
 import { createClient } from '@fetchkit/ffetch'
-import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
-import { bulkheadPlugin } from '@fetchkit/ffetch/plugins/bulkhead'
-import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
-import { hedgePlugin } from '@fetchkit/ffetch/plugins/hedge'
 import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
 import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progress'
+import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
+import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+import { bulkheadPlugin } from '@fetchkit/ffetch/plugins/bulkhead'
+import { hedgePlugin } from '@fetchkit/ffetch/plugins/hedge'
 
 const client = createClient({
   plugins: [
-    bulkheadPlugin({ maxConcurrent: 10, maxQueue: 50 }),
-    dedupePlugin({ ttl: 30_000, sweepInterval: 5_000 }),
-    hedgePlugin({ delay: 50 }),
-    circuitPlugin({ threshold: 5, reset: 30_000 }),
     requestShortcutsPlugin(),
     responseShortcutsPlugin(),
     downloadProgressPlugin((progress) => {
       console.log(`${(progress.percent * 100).toFixed(1)}%`)
     }),
+    dedupePlugin({ ttl: 30_000, sweepInterval: 5_000 }),
+    circuitPlugin({ threshold: 5, reset: 30_000 }),
+    bulkheadPlugin({ maxConcurrent: 10, maxQueue: 50 }),
+    hedgePlugin({ delay: 50 }),
   ],
+})
+```
+
+### Convenience plugins
+
+The request shortcuts plugin adds HTTP method shortcuts on the client instance:
+
+```typescript
+const client = createClient({
+  plugins: [requestShortcutsPlugin()],
+})
+
+const usersResponse = await client.get('https://example.com/users')
+const createResponse = await client.post('https://example.com/users', {
+  body: JSON.stringify({ name: 'Alice' }),
+  headers: { 'content-type': 'application/json' },
+})
+```
+
+The response shortcuts plugin adds parsing convenience methods on the returned request promise:
+
+```typescript
+const client = createClient({
+  plugins: [responseShortcutsPlugin()],
+})
+
+const data = await client('https://example.com/users').json()
+```
+
+The download progress plugin exposes chunk-level progress updates:
+
+```typescript
+const client = createClient({
+  plugins: [
+    downloadProgressPlugin((progress) => {
+      console.log(progress.transferredBytes, progress.percent)
+    }),
+  ],
+})
+```
+
+### Resilience plugins
+
+The dedupe plugin collapses identical in-flight requests:
+
+```typescript
+const client = createClient({
+  plugins: [dedupePlugin({ ttl: 30_000, sweepInterval: 5_000 })],
+})
+```
+
+The circuit plugin fails fast after repeated failures:
+
+```typescript
+const client = createClient({
+  plugins: [circuitPlugin({ threshold: 5, reset: 30_000 })],
 })
 ```
 
@@ -108,29 +171,11 @@ const response = await client('https://example.com/data')
 
 > **Warning:** Combining `hedgePlugin` with retries multiplies upstream traffic. Each retry attempt can itself spawn `1 + maxHedges` requests. For example, `retries: 2` with `maxHedges: 1` can produce up to 6 requests for a single call. Prefer one or the other — hedging for tail latency, retries for transient failures — rather than combining both.
 
-The request shortcuts plugin adds HTTP method shortcuts on the client instance:
+Built-in and custom plugins are configured the same way: pass plugin instances in the `plugins` array when calling `createClient()`.
 
-```typescript
-const client = createClient({
-  plugins: [requestShortcutsPlugin()],
-})
+## From Using to Building Plugins
 
-const usersResponse = await client.get('https://example.com/users')
-const createResponse = await client.post('https://example.com/users', {
-  body: JSON.stringify({ name: 'Alice' }),
-  headers: { 'content-type': 'application/json' },
-})
-```
-
-The response shortcuts plugin adds parsing convenience methods on the returned request promise:
-
-```typescript
-const client = createClient({
-  plugins: [responseShortcutsPlugin()],
-})
-
-const data = await client('https://example.com/users').json()
-```
+Once you're comfortable composing built-in plugins, the sections below show how to author your own plugins and extensions.
 
 ## Writing a Custom Plugin
 
@@ -242,20 +287,6 @@ const jsonShortcutPlugin: ClientPlugin<
 }
 ```
 
-## Registering and Using Custom Plugins
-
-```typescript
-import { createClient } from '@fetchkit/ffetch'
-
-const client = createClient({
-  timeout: 10_000,
-  retries: 2,
-  plugins: [
-    // custom plugin instances
-  ],
-})
-```
-
 ## Best Practices
 
 - Keep plugins side-effect free outside controlled state.
@@ -263,3 +294,14 @@ const client = createClient({
 - Use `order` only when needed; document ordering assumptions.
 - Avoid throwing from `onFinally` unless intentional.
 - Use `as const` plugin tuples for best TypeScript extension inference.
+
+## App-Level Concerns
+
+Plugins provide request-time mechanics, but some resilience concerns are best handled at application boundaries:
+
+- **Graceful circuit recovery**: When a circuit closes, avoid sending all queued or waiting traffic at once. Recover gradually (for example, ramp request rate or release waiting callers in batches) to prevent thundering herd spikes.
+- **Bulkhead boundaries**: Decide bulkhead scope per dependency (service, host, or endpoint class). A single global bulkhead can cause unrelated traffic to compete for the same slots.
+- **Retry and hedge budgets**: Set retry/hedge limits based on upstream capacity. Multiplicative traffic (`retries` x hedges) can overwhelm dependencies even if each plugin is correct in isolation.
+- **Caching strategy**: Pair plugin behavior with explicit cache policy (TTL, stale-while-revalidate, cache keys). Good caching reduces load and tail latency, but stale or over-broad keys can hide failures or serve incorrect data.
+- **Fallback behavior**: Define app-level fallback responses or degraded modes when circuit/bulkhead limits are hit, instead of only surfacing raw errors to end users.
+- **Observability and alerting**: Emit metrics for circuit opens/closes, bulkhead queue depth, and rejection rates. These signals are critical for tuning thresholds and queue sizes.

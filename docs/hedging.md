@@ -6,6 +6,8 @@ Unlike retries — which wait for a failure before trying again — hedging send
 
 Hedging is well-suited to idempotent endpoints where duplicate reads are harmless, and where a small percentage of requests are disproportionately slow (the "long tail").
 
+For the canonical option/type reference, see [api.md -> Hedge Plugin](./api.md#hedge-plugin).
+
 Hedging is provided as an optional plugin.
 
 ## Import

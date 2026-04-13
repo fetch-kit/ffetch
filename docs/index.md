@@ -76,11 +76,18 @@
 ## **Getting Started**
 
 1. **Start with the [README](../README.md)** for installation and basic usage
-2. **Check [compatibility.md](./compatibility.md)** to ensure your environment is supported
-3. **Read [api.md](./api.md)** for complete configuration options
-4. **Read [plugins.md](./plugins.md)** to understand plugin architecture and custom extensions
-5. **Explore [examples.md](./examples.md)** for patterns that match your use case
-6. **Dive into [advanced.md](./advanced.md)** and [hooks.md](./hooks.md)\*\* for powerful features
+2. **If migrating from v4, read [migration.md](./migration.md)** before applying v5 examples
+3. **Check [compatibility.md](./compatibility.md)** to ensure your environment is supported
+4. **Explore [examples.md](./examples.md)** for concrete patterns you can adapt quickly
+5. **Read [hooks.md](./hooks.md)** for auth, logging, request/response transforms, and caching
+6. **Read [api.md](./api.md)** for full option and plugin reference details
+7. **Read [plugins.md](./plugins.md)** to understand lifecycle, ordering, and custom plugins
+8. **Dive into [advanced.md](./advanced.md)** for retry strategy, circuit behavior, and production patterns
+
+### **Alternative Learning Paths**
+
+- **Concept-first path**: README -> compatibility -> plugins -> api -> examples -> advanced
+- **Example-first path**: README -> examples -> hooks -> api -> plugins -> advanced
 
 ## **Finding What You Need**
 

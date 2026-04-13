@@ -4,6 +4,12 @@ The native `fetch` API does not throw errors for HTTP error status codes (4xx, 5
 
 This document explains exactly how, when, and what errors are thrown by the ffetch client, especially in relation to the `throwOnHttpError` flag.
 
+See also:
+
+- [api.md](./api.md) for option reference (`throwOnHttpError`, retries, plugin configuration)
+- [advanced.md -> Custom Error Handling](./advanced.md#custom-error-handling) for runtime handling patterns
+- [advanced.md -> Circuit Breaker Pattern](./advanced.md#circuit-breaker-pattern) for circuit-specific failure behavior
+
 ## Summary Table
 
 | Scenario                           | throwOnHttpError: true | throwOnHttpError: false | What gets thrown/returned           |
