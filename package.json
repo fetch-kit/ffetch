@@ -16,7 +16,7 @@
   },
   "homepage": "https://github.com/fetch-kit/ffetch#readme",
   "bugs": "https://github.com/fetch-kit/ffetch/issues",
-  "author": "Your Name <you@example.com>",
+  "author": "Gabor Koos <gabor@gaborkoos.com>",
   "license": "MIT",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

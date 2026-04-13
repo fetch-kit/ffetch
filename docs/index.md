@@ -49,6 +49,12 @@
   - Abort behavior for queued requests
   - Integration with dedupe, retries, and circuit breaker
 
+- **[production-operations.md](./production-operations.md)** - Canonical production runbook and checklist
+  - Pre-deployment configuration checklist
+  - Metrics and alerting baseline
+  - Incident playbook for circuit, latency, and rate-limit failures
+  - Recommended baseline configurations
+
 ### **Hooks & Transformation**
 
 - **[hooks.md](./hooks.md)** - Lifecycle hooks and request/response transformation
@@ -83,6 +89,7 @@
 6. **Read [api.md](./api.md)** for full option and plugin reference details
 7. **Read [plugins.md](./plugins.md)** to understand lifecycle, ordering, and custom plugins
 8. **Dive into [advanced.md](./advanced.md)** for retry strategy, circuit behavior, and production patterns
+9. **Use [production-operations.md](./production-operations.md)** when preparing rollout, alerts, and incident response
 
 ### **Alternative Learning Paths**
 
@@ -116,6 +123,7 @@
 | Use `client(url).json()` style shortcuts         | [api.md](./api.md#response-shortcuts-plugin)                 |
 | Reduce tail latency with parallel attempts       | [hedging.md](./hedging.md)                                   |
 | Cap concurrency with queue backpressure          | [bulkhead.md](./bulkhead.md)                                 |
+| Operate ffetch safely in production              | [production-operations.md](./production-operations.md)       |
 
 ## **Key Concepts**
 

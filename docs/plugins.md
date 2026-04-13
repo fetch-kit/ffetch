@@ -298,6 +298,7 @@ const jsonShortcutPlugin: ClientPlugin<
 ## App-Level Concerns
 
 Plugins provide request-time mechanics, but some resilience concerns are best handled at application boundaries:
+For a deployment checklist, metrics baseline, and incident playbook, see [production-operations.md](./production-operations.md).
 
 - **Graceful circuit recovery**: When a circuit closes, avoid sending all queued or waiting traffic at once. Recover gradually (for example, ramp request rate or release waiting callers in batches) to prevent thundering herd spikes.
 - **Bulkhead boundaries**: Decide bulkhead scope per dependency (service, host, or endpoint class). A single global bulkhead can cause unrelated traffic to compete for the same slots.

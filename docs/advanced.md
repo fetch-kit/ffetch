@@ -1,5 +1,7 @@
 # Advanced Features
 
+For deployment readiness, alerting, and incident response, use the canonical runbook in [production-operations.md](./production-operations.md).
+
 ## Per-request Overrides
 
 You can override any client option on a per-request basis by passing it in the `init` parameter:

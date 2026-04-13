@@ -289,17 +289,18 @@ Native `fetch`'s controversial behavior of not throwing errors for HTTP error st
 
 ## Documentation
 
-| Topic                                         | Description                                                               |
-| --------------------------------------------- | ------------------------------------------------------------------------- |
-| **[Complete Documentation](./docs/index.md)** | **Start here** - Documentation index and overview                         |
-| **[API Reference](./docs/api.md)**            | Complete API documentation and configuration options                      |
-| **[Plugin Architecture](./docs/plugins.md)**  | Plugin lifecycle, custom plugin authoring, and integration patterns       |
-| **[Deduplication](./docs/deduplication.md)**  | How deduplication works, hash config, optional TTL cleanup, limitations   |
-| **[Error Handling](./docs/errorhandling.md)** | Strategies for managing errors, including `throwOnHttpError`              |
-| **[Advanced Features](./docs/advanced.md)**   | Per-request overrides, pending requests, circuit breakers, custom errors  |
-| **[Hooks & Transformation](./docs/hooks.md)** | Lifecycle hooks, authentication, logging, request/response transformation |
-| **[Usage Examples](./docs/examples.md)**      | Real-world patterns: REST clients, GraphQL, file uploads, microservices   |
-| **[Compatibility](./docs/compatibility.md)**  | Browser/Node.js support, polyfills, framework integration                 |
+| Topic                                                        | Description                                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| **[Complete Documentation](./docs/index.md)**                | **Start here** - Documentation index and overview                         |
+| **[API Reference](./docs/api.md)**                           | Complete API documentation and configuration options                      |
+| **[Plugin Architecture](./docs/plugins.md)**                 | Plugin lifecycle, custom plugin authoring, and integration patterns       |
+| **[Deduplication](./docs/deduplication.md)**                 | How deduplication works, hash config, optional TTL cleanup, limitations   |
+| **[Error Handling](./docs/errorhandling.md)**                | Strategies for managing errors, including `throwOnHttpError`              |
+| **[Advanced Features](./docs/advanced.md)**                  | Per-request overrides, pending requests, circuit breakers, custom errors  |
+| **[Production Operations](./docs/production-operations.md)** | Pre-deploy checklist, alerting baseline, and incident playbook            |
+| **[Hooks & Transformation](./docs/hooks.md)**                | Lifecycle hooks, authentication, logging, request/response transformation |
+| **[Usage Examples](./docs/examples.md)**                     | Real-world patterns: REST clients, GraphQL, file uploads, microservices   |
+| **[Compatibility](./docs/compatibility.md)**                 | Browser/Node.js support, polyfills, framework integration                 |
 
 ## Environment Requirements
 
