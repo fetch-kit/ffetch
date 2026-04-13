@@ -1,5 +1,20 @@
 # ffetch
 
+## 5.3.0
+
+### Minor Changes
+
+- b5a9a52: Added
+  - Hedge plugin implemented
+  - Bulkhead plugin implemented
+  - Integration tests
+
+  Changed
+  - baseDispatch made context-driven so wrapDispatch plugins can inject modified request and signal per attempt
+
+  Documentation
+  - Reworked and improved
+
 ## 5.2.1
 
 ### Patch Changes
