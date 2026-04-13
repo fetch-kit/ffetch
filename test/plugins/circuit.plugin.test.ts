@@ -117,4 +117,70 @@ describe('circuit plugin parity', () => {
     await client('https://example.com/mix-4')
     expect(client.circuitOpen).toBe(false)
   })
+
+  it('counts network errors (thrown) toward threshold, not just bad responses', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('network fail'))
+
+    const client = createClient({
+      retries: 0,
+      plugins: [circuitPlugin({ threshold: 3, reset: 500 })],
+    })
+
+    // First two throw the underlying error — circuit not open yet
+    await expect(client('https://example.com/net-1')).rejects.toThrow(
+      'network fail'
+    )
+    expect(client.circuitOpen).toBe(false)
+
+    await expect(client('https://example.com/net-2')).rejects.toThrow(
+      'network fail'
+    )
+    expect(client.circuitOpen).toBe(false)
+
+    // Third failure reaches threshold — circuit opens, error is rewritten to CircuitOpenError
+    await expect(client('https://example.com/net-3')).rejects.toThrow(
+      CircuitOpenError
+    )
+    expect(client.circuitOpen).toBe(true)
+  })
+
+  it('fires onCircuitOpen and onCircuitClose when failure is a network error', async () => {
+    let callCount = 0
+    global.fetch = vi.fn().mockImplementation(async () => {
+      callCount++
+      if (callCount < 3) throw new Error('fail')
+      return new Response('ok')
+    })
+
+    const onCircuitOpen = vi.fn()
+    const onCircuitClose = vi.fn()
+
+    const client = createClient({
+      retries: 0,
+      plugins: [
+        circuitPlugin({
+          threshold: 2,
+          reset: 50,
+          onCircuitOpen,
+          onCircuitClose,
+        }),
+      ],
+    })
+
+    await expect(client('https://example.com/hooks-net-1')).rejects.toThrow(
+      'fail'
+    )
+    await expect(client('https://example.com/hooks-net-2')).rejects.toThrow(
+      CircuitOpenError
+    )
+    expect(onCircuitOpen).toHaveBeenCalledTimes(1)
+    expect(client.circuitOpen).toBe(true)
+
+    await new Promise((r) => setTimeout(r, 70))
+
+    const recovered = await client('https://example.com/hooks-net-recover')
+    expect(recovered.status).toBe(200)
+    expect(onCircuitClose).toHaveBeenCalledTimes(1)
+    expect(client.circuitOpen).toBe(false)
+  })
 })

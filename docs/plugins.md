@@ -62,6 +62,7 @@ Order details per hook:
 import { createClient } from '@fetchkit/ffetch'
 import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+import { hedgePlugin } from '@fetchkit/ffetch/plugins/hedge'
 import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
 import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progress'
@@ -69,6 +70,7 @@ import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progre
 const client = createClient({
   plugins: [
     dedupePlugin({ ttl: 30_000, sweepInterval: 5_000 }),
+    hedgePlugin({ delay: 50 }),
     circuitPlugin({ threshold: 5, reset: 30_000 }),
     requestShortcutsPlugin(),
     responseShortcutsPlugin(),
@@ -78,6 +80,19 @@ const client = createClient({
   ],
 })
 ```
+
+The hedge plugin races multiple concurrent attempts and cancels losers when the first acceptable response wins:
+
+```typescript
+const client = createClient({
+  plugins: [hedgePlugin({ delay: 50 })],
+})
+
+// Hedge reduces tail latency by racing attempts after a short delay
+const response = await client('https://example.com/data')
+```
+
+> **Warning:** Combining `hedgePlugin` with retries multiplies upstream traffic. Each retry attempt can itself spawn `1 + maxHedges` requests. For example, `retries: 2` with `maxHedges: 1` can produce up to 6 requests for a single call. Prefer one or the other — hedging for tail latency, retries for transient failures — rather than combining both.
 
 The request shortcuts plugin adds HTTP method shortcuts on the client instance:
 

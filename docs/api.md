@@ -16,6 +16,7 @@ import {
   dedupeRequestHash,
 } from '@fetchkit/ffetch/plugins/dedupe'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+import { hedgePlugin } from '@fetchkit/ffetch/plugins/hedge'
 import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
 import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progress'
@@ -90,6 +91,44 @@ if (client.circuitOpen) {
   console.warn('Circuit breaker is open')
 }
 ```
+
+#### Hedge Plugin
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { hedgePlugin } from '@fetchkit/ffetch/plugins/hedge'
+
+const client = createClient({
+  plugins: [
+    hedgePlugin({
+      delay: 50, // 50ms before sending hedge attempt
+      maxHedges: 1, // send at most 1 additional attempt
+      shouldHedge: (req) => req.method === 'GET', // only hedge GET requests
+    }),
+  ],
+})
+
+// Concurrent requests automatically hedge; fast response wins
+const data = await client('https://api.example.com/data')
+```
+
+Options:
+
+| Option        | Type                                                       | Default                        | Description                                          |
+| ------------- | ---------------------------------------------------------- | ------------------------------ | ---------------------------------------------------- |
+| `delay`       | `number \| (req: Request) => number`                       | Required                       | Delay (ms) before sending hedge attempt.             |
+| `maxHedges`   | `number`                                                   | `1`                            | Maximum number of hedge attempts.                    |
+| `shouldHedge` | `(req: Request) => boolean`                                | Safe methods (GET, HEAD, etc.) | Function to determine if a request should be hedged. |
+| `onHedge`     | `(req: Request, attempt: number) => void or Promise<void>` | Undefined                      | Callback when a hedge attempt is sent.               |
+| `order`       | `number`                                                   | `15`                           | Plugin execution order.                              |
+
+Notes:
+
+- Hedge races multiple attempts and returns the first _acceptable_ response (ok status, or 4xx except 429). If all attempts settle without a clear winner, the last remaining attempt wins regardless of status.
+- 5xx and 429 responses are not winners; hedge will wait for other attempts.
+- Loser attempts are cancelled (via `AbortController`) to prevent wasted bandwidth.
+- Hedge and retries are _alternative_ strategies; combining them multiplies traffic. Use retries or hedge, not both, unless you carefully quantify the cost.
+- Hedge is ordered at `15` (between dedupe at `10` and circuit at `20`). Dedupe collapses callers before hedge races them.
 
 #### Request Shortcuts Plugin
 

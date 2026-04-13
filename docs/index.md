@@ -37,6 +37,12 @@
   - Retry strategies and circuit breakers
   - Custom error handling
 
+- **[hedging.md](./hedging.md)** - Reduce tail latency by racing parallel attempts
+  - Hedging plugin configuration and behavior
+  - Delay strategies and max hedges
+  - Integration with retries and circuit breakers
+  - Performance tuning for high-latency endpoints
+
 ### **Hooks & Transformation**
 
 - **[hooks.md](./hooks.md)** - Lifecycle hooks and request/response transformation
@@ -95,6 +101,7 @@
 | Cache responses                                  | [examples.md](./examples.md#caching-with-ttl)                |
 | Use `client.get()` / `client.post()` shortcuts   | [api.md](./api.md#request-shortcuts-plugin)                  |
 | Use `client(url).json()` style shortcuts         | [api.md](./api.md#response-shortcuts-plugin)                 |
+| Reduce tail latency with parallel attempts       | [hedging.md](./hedging.md)                                   |
 
 ## **Key Concepts**
 

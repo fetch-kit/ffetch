@@ -32,6 +32,11 @@
       "import": "./dist/plugins/dedupe.js",
       "require": "./dist/plugins/dedupe.cjs"
     },
+    "./plugins/hedge": {
+      "types": "./dist/plugins/hedge.d.ts",
+      "import": "./dist/plugins/hedge.js",
+      "require": "./dist/plugins/hedge.cjs"
+    },
     "./plugins/circuit": {
       "types": "./dist/plugins/circuit.d.ts",
       "import": "./dist/plugins/circuit.js",

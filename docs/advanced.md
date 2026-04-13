@@ -213,9 +213,10 @@ This is useful for:
 
 ### How it Works
 
+- A **failure** is counted when the response status is 5xx or 429, or when a network error is thrown. Other 4xx responses (400, 401, 403, 404, etc.) are **not** counted as failures — they reset the consecutive failure count as if the request succeeded.
 - When the number of consecutive failures reaches the `threshold`, the circuit "opens" and all further requests fail fast with a `CircuitOpenError`
 - After the `reset` period (in milliseconds), the circuit "closes" and requests are allowed again
-- If a request succeeds, the failure count resets
+- If a request succeeds or returns a non-failure 4xx, the failure count resets
 - If `onCircuitOpen` is configured, it runs both when the circuit opens and when requests are blocked while it is already open
 
 ### Configuration

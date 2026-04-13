@@ -64,6 +64,7 @@ ffetch uses a plugin architecture for optional features, so you only include wha
 - **Zero runtime deps** – ships as dual ESM/CJS
 - **Configurable error handling** – custom error types and `throwOnHttpError` flag to throw on HTTP errors
 - **Circuit breaker plugin (optional, prebuilt)** – automatic failure protection
+- **Hedge plugin (optional, prebuilt)** – race parallel attempts to reduce tail latency
 - **Deduplication plugin (optional, prebuilt)** – automatic deduping of in-flight identical requests
 - **Request shortcuts plugin (optional, prebuilt)** – call `client.get(url)` / `.post()` / `.put()` / `.patch()` / `.delete()` directly on the client
 - **Response shortcuts plugin (optional, prebuilt)** – call `client(url).json()` / `.text()` / `.blob()` directly on the request promise
@@ -76,6 +77,7 @@ ffetch uses a plugin architecture for optional features, so you only include wha
 All plugins are tree-shakeable — import only what you use.
 
 - **dedupePlugin (optional)**: dedupe in-flight identical requests.
+- **hedgePlugin (optional)**: race multiple attempts and cancel losers when a winner is found.
 - **circuitPlugin (optional)**: fail fast after repeated failures.
 - **requestShortcutsPlugin (optional)**: HTTP method shortcuts on the client (`.get()` / `.post()` / `.put()` / `.patch()` / `.delete()` / `.head()` / `.options()`).
 - **responseShortcutsPlugin (optional)**: use `client(url).json()` / `.text()` / `.blob()` style parsing.
@@ -345,6 +347,7 @@ See [deduplication.md](./docs/deduplication.md) for full details.
 | Plugin Architecture  | ❌ Not available                                        | ⚠️ Interceptors only           | ⚠️ Hook-based extensions                      | ✅ First-class plugin pipeline (optional built-in + custom plugins)                    |
 | Circuit Breaker      | ❌ Not available                                        | ❌ Manual or plugins           | ❌ Manual                                     | ✅ Automatic failure protection                                                        |
 | Deduplication        | ❌ Not available                                        | ❌ Not available               | ❌ Not available                              | ✅ Optional via `dedupePlugin()`                                                       |
+| Request Hedging      | ❌ Not available                                        | ❌ Not available               | ❌ Not available                              | ✅ Optional via `hedgePlugin()` (tail latency reduction)                               |
 | Request Monitoring   | ❌ Manual tracking                                      | ❌ Manual tracking             | ❌ Manual tracking                            | ✅ Built-in pending requests                                                           |
 | Error Types          | ❌ Generic errors                                       | ⚠️ HTTP errors only            | ✅ Specific error classes                     | ✅ Specific error classes                                                              |
 | TypeScript           | ⚠️ Basic types                                          | ⚠️ Basic types                 | ✅ Strong types                               | ✅ Full type safety                                                                    |

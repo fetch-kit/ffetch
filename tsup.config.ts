@@ -6,6 +6,7 @@ export default defineConfig([
       'src/index.ts',
       'src/plugins/dedupe.ts',
       'src/plugins/circuit.ts',
+      'src/plugins/hedge.ts',
       'src/plugins/response-shortcuts.ts',
       'src/plugins/request-shortcuts.ts',
       'src/plugins/download-progress.ts',
