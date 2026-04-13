@@ -19,6 +19,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 
 import { createClient } from '../../src/client.js'
 import { CircuitOpenError } from '../../src/index.js'
+import { bulkheadPlugin } from '../../src/plugins/bulkhead.js'
 import { circuitPlugin } from '../../src/plugins/circuit.js'
 import { dedupePlugin } from '../../src/plugins/dedupe.js'
 import { hedgePlugin } from '../../src/plugins/hedge.js'
@@ -218,6 +219,62 @@ describe('dedupe + hedge: bounded fetch count', () => {
 
     // Dedupe → 1 active; hedge → +1; total ≤ 2 regardless of 5 callers
     expect(calls).toBeLessThanOrEqual(2)
+  })
+})
+
+describe('bulkhead combinations', () => {
+  it('bulkhead + dedupe still sends a single fetch for concurrent identical callers', async () => {
+    const resolvers: Array<(r: Response) => void> = []
+    const fetchHandler = vi.fn(
+      () => new Promise<Response>((resolve) => resolvers.push(resolve))
+    )
+
+    const client = createClient({
+      retries: 0,
+      fetchHandler,
+      // Make dedupe outer (order 10) and bulkhead inner so duplicate callers
+      // collapse before acquiring bulkhead slots.
+      plugins: [
+        dedupePlugin(),
+        bulkheadPlugin({ maxConcurrent: 1, order: 15 }),
+      ],
+    })
+
+    const p1 = client('https://example.com/same')
+    const p2 = client('https://example.com/same')
+    const p3 = client('https://example.com/same')
+
+    await vi.waitFor(() => {
+      expect(fetchHandler).toHaveBeenCalledTimes(1)
+    })
+
+    resolvers[0](new Response('ok', { status: 200 }))
+    const all = await Promise.all([p1, p2, p3])
+
+    expect(all.every((r) => r.status === 200)).toBe(true)
+    expect(fetchHandler).toHaveBeenCalledTimes(1)
+  })
+
+  it('bulkhead + circuit opens after consecutive failing requests', async () => {
+    const fetchHandler = vi.fn(async () => new Response('err', { status: 500 }))
+
+    const client = createClient({
+      retries: 0,
+      fetchHandler,
+      plugins: [
+        bulkheadPlugin({ maxConcurrent: 1 }),
+        circuitPlugin({ threshold: 2, reset: 5000 }),
+      ],
+    })
+
+    await client('https://example.com/bulkhead-circuit-1')
+    await expect(
+      client('https://example.com/bulkhead-circuit-2')
+    ).rejects.toThrow(CircuitOpenError)
+
+    expect((client as unknown as { circuitOpen: boolean }).circuitOpen).toBe(
+      true
+    )
   })
 })
 

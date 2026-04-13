@@ -127,8 +127,9 @@ describe('plugin ordering and interactions', () => {
       .fn()
       .mockResolvedValue(new Response('{"ok":true}', { status: 200 }))
 
+    const plugins = [responseShortcutsPlugin(), dedupePlugin()] as const
     const client = createClient({
-      plugins: [responseShortcutsPlugin(), dedupePlugin()],
+      plugins,
     })
 
     const p1 = client('https://example.com/shortcuts-dedupe')
@@ -148,12 +149,13 @@ describe('plugin ordering and interactions', () => {
       .fn()
       .mockResolvedValue(new Response('fail', { status: 500 }))
 
+    const plugins = [
+      responseShortcutsPlugin(),
+      circuitPlugin({ threshold: 1, reset: 200 }),
+    ] as const
     const client = createClient({
       retries: 0,
-      plugins: [
-        responseShortcutsPlugin(),
-        circuitPlugin({ threshold: 1, reset: 200 }),
-      ],
+      plugins,
     })
 
     await expect(

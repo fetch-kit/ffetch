@@ -20,6 +20,12 @@ export class CircuitOpenError extends BaseError {
   }
 }
 
+export class BulkheadFullError extends BaseError {
+  constructor(message = 'Bulkhead queue is full', cause?: unknown) {
+    super('BulkheadFullError', message, cause)
+  }
+}
+
 export class AbortError extends BaseError {
   constructor(message = 'Request was aborted', cause?: unknown) {
     super('AbortError', message, cause)

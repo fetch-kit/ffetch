@@ -15,6 +15,7 @@ import {
   dedupePlugin,
   dedupeRequestHash,
 } from '@fetchkit/ffetch/plugins/dedupe'
+import { bulkheadPlugin } from '@fetchkit/ffetch/plugins/bulkhead'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
 import { hedgePlugin } from '@fetchkit/ffetch/plugins/hedge'
 import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
@@ -81,8 +82,12 @@ const client = createClient({
     circuitPlugin({
       threshold: 5,
       reset: 30_000,
-      onCircuitOpen: (req) => console.warn('Circuit opened:', req.url),
-      onCircuitClose: (req) => console.info('Circuit closed:', req.url),
+      onCircuitOpen: ({ request, reason }) => {
+        console.warn('Circuit opened:', request.url, reason.type)
+      },
+      onCircuitClose: ({ request, response }) => {
+        console.info('Circuit closed:', request.url, response.status)
+      },
     }),
   ],
 })
@@ -91,6 +96,48 @@ if (client.circuitOpen) {
   console.warn('Circuit breaker is open')
 }
 ```
+
+Notes:
+
+- `onCircuitOpen` receives `{ request, reason }` where `reason.type` is either `'threshold-reached'` or `'already-open'`.
+- When `reason.type === 'threshold-reached'`, `reason.response` (for HTTP failures) or `reason.error` (for thrown failures) is populated.
+- `onCircuitClose` receives `{ request, response }` for the successful recovery probe that closed the circuit.
+
+#### Bulkhead Plugin
+
+```typescript
+import { createClient } from '@fetchkit/ffetch'
+import { bulkheadPlugin } from '@fetchkit/ffetch/plugins/bulkhead'
+
+const client = createClient({
+  plugins: [
+    bulkheadPlugin({
+      maxConcurrent: 10,
+      maxQueue: 50,
+    }),
+  ],
+})
+
+// Active requests run immediately up to maxConcurrent.
+// Additional requests queue (up to maxQueue), then reject with BulkheadFullError.
+const data = await client('https://api.example.com/data')
+```
+
+Options:
+
+| Option          | Type                                      | Default   | Description                                                      |
+| --------------- | ----------------------------------------- | --------- | ---------------------------------------------------------------- |
+| `maxConcurrent` | `number`                                  | Required  | Maximum in-flight requests allowed at once.                      |
+| `maxQueue`      | `number`                                  | Unlimited | Maximum queued requests waiting for a slot.                      |
+| `onReject`      | `(req: Request) => void or Promise<void>` | Undefined | Callback when a request is rejected because the queue is full.   |
+| `order`         | `number`                                  | `5`       | Plugin execution order (lower runs outermost in `wrapDispatch`). |
+
+Notes:
+
+- Bulkhead isolates concurrency pressure per client instance.
+- Queued requests that abort are removed from the queue and rejected with `AbortError`.
+- Combining bulkhead with retries can increase queue pressure because each retry reacquires a slot.
+- With defaults, bulkhead (`order: 5`) wraps before dedupe (`order: 10`). If you want dedupe to collapse callers before bulkhead slot acquisition, set a higher bulkhead order.
 
 #### Hedge Plugin
 

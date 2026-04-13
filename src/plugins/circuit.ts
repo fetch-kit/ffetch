@@ -5,11 +5,25 @@ export type CircuitPluginExtension = {
   circuitOpen: boolean
 }
 
+export type CircuitOpenReason =
+  | { type: 'already-open' }
+  | {
+      type: 'threshold-reached'
+      response?: Response
+      error?: unknown
+    }
+
 export type CircuitPluginOptions = {
   threshold: number
   reset: number
-  onCircuitOpen?: (req: Request) => void | Promise<void>
-  onCircuitClose?: (req: Request) => void | Promise<void>
+  onCircuitOpen?: (ctx: {
+    request: Request
+    reason: CircuitOpenReason
+  }) => void | Promise<void>
+  onCircuitClose?: (ctx: {
+    request: Request
+    response: Response
+  }) => void | Promise<void>
   order?: number
 }
 
@@ -41,21 +55,30 @@ export function circuitPlugin(
     return false
   }
 
-  const onSuccess = async (req: Request) => {
+  const onSuccess = async (req: Request, response: Response) => {
     const wasOpen = isOpen
     failures = 0
     if (wasOpen) {
       isOpen = false
-      await onCircuitClose?.(req)
+      await onCircuitClose?.({ request: req, response })
     }
   }
 
-  const onFailure = async (req: Request): Promise<boolean> => {
+  const onFailure = async (
+    req: Request,
+    reason: Omit<
+      Extract<CircuitOpenReason, { type: 'threshold-reached' }>,
+      'type'
+    >
+  ): Promise<boolean> => {
     failures++
     if (failures >= threshold) {
       nextAttempt = Date.now() + reset
       isOpen = true
-      await onCircuitOpen?.(req)
+      await onCircuitOpen?.({
+        request: req,
+        reason: { type: 'threshold-reached', ...reason },
+      })
       return true
     }
     return false
@@ -72,18 +95,21 @@ export function circuitPlugin(
     },
     preRequest: async (ctx) => {
       if (Date.now() < nextAttempt) {
-        await onCircuitOpen?.(ctx.request)
+        await onCircuitOpen?.({
+          request: ctx.request,
+          reason: { type: 'already-open' },
+        })
         throw new CircuitOpenError('Circuit is open')
       }
     },
     onSuccess: async (ctx, response) => {
       if (shouldCountFailure(response, undefined)) {
-        const opened = await onFailure(ctx.request)
+        const opened = await onFailure(ctx.request, { response })
         if (opened) {
           throw new CircuitOpenError('Circuit is open')
         }
       } else {
-        await onSuccess(ctx.request)
+        await onSuccess(ctx.request, response)
       }
     },
     onError: async (ctx, error) => {
@@ -91,7 +117,7 @@ export function circuitPlugin(
         return
       }
       if (shouldCountFailure(undefined, error)) {
-        const opened = await onFailure(ctx.request)
+        const opened = await onFailure(ctx.request, { error })
         if (opened) {
           throw new CircuitOpenError('Circuit is open')
         }

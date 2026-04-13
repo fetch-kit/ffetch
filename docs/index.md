@@ -16,7 +16,7 @@
 ### **Plugin Architecture**
 
 - **[plugins.md](./plugins.md)** - Plugin lifecycle, ordering, custom plugin authoring
-  - Built-in feature plugins (`dedupe`, `circuit`, `request-shortcuts`, `response-shortcuts`)
+  - Built-in feature plugins (`bulkhead`, `dedupe`, `circuit`, `request-shortcuts`, `response-shortcuts`)
   - Writing and registering custom plugins
   - Public plugin types and extension patterns
 
@@ -42,6 +42,12 @@
   - Delay strategies and max hedges
   - Integration with retries and circuit breakers
   - Performance tuning for high-latency endpoints
+
+- **[bulkhead.md](./bulkhead.md)** - Isolate concurrency and apply queue backpressure
+  - Bulkhead plugin configuration and defaults
+  - Queue overflow handling and rejection strategy
+  - Abort behavior for queued requests
+  - Integration with dedupe, retries, and circuit breaker
 
 ### **Hooks & Transformation**
 
@@ -102,6 +108,7 @@
 | Use `client.get()` / `client.post()` shortcuts   | [api.md](./api.md#request-shortcuts-plugin)                  |
 | Use `client(url).json()` style shortcuts         | [api.md](./api.md#response-shortcuts-plugin)                 |
 | Reduce tail latency with parallel attempts       | [hedging.md](./hedging.md)                                   |
+| Cap concurrency with queue backpressure          | [bulkhead.md](./bulkhead.md)                                 |
 
 ## **Key Concepts**
 
@@ -109,7 +116,7 @@
 
 - **Timeouts**: Per-request or global timeout configuration
 - **Retries**: Exponential backoff with jitter and custom retry logic
-- **Plugin-based optional features**: Circuit breaker, dedupe, and third-party plugins
+- **Plugin-based optional features**: Bulkhead, circuit breaker, dedupe, and third-party plugins
 - **Hooks**: Lifecycle events for logging, auth, and transformation
 - **Pending Requests**: Real-time monitoring of active requests
 - **Custom fetch wrapping**: Pluggable fetch implementation for SSR, node-fetch, undici, and framework-provided fetch

@@ -63,6 +63,7 @@ ffetch uses a plugin architecture for optional features, so you only include wha
 - **Universal** – Node.js, Browser, Cloudflare Workers, React Native
 - **Zero runtime deps** – ships as dual ESM/CJS
 - **Configurable error handling** – custom error types and `throwOnHttpError` flag to throw on HTTP errors
+- **Bulkhead plugin (optional, prebuilt)** – cap concurrency and queue depth per client instance
 - **Circuit breaker plugin (optional, prebuilt)** – automatic failure protection
 - **Hedge plugin (optional, prebuilt)** – race parallel attempts to reduce tail latency
 - **Deduplication plugin (optional, prebuilt)** – automatic deduping of in-flight identical requests
@@ -70,13 +71,14 @@ ffetch uses a plugin architecture for optional features, so you only include wha
 - **Response shortcuts plugin (optional, prebuilt)** – call `client(url).json()` / `.text()` / `.blob()` directly on the request promise
 - **Download progress plugin (optional, prebuilt)** – stream download progress callbacks with bytes transferred and percentage
 
-**Built-in error classes:** `TimeoutError`, `RetryLimitError`, `CircuitOpenError`, `HttpError`, `NetworkError`, `AbortError`
+**Built-in error classes:** `TimeoutError`, `RetryLimitError`, `CircuitOpenError`, `BulkheadFullError`, `HttpError`, `NetworkError`, `AbortError`
 
 ### Built-in Plugins at a Glance
 
 All plugins are tree-shakeable — import only what you use.
 
 - **dedupePlugin (optional)**: dedupe in-flight identical requests.
+- **bulkheadPlugin (optional)**: cap in-flight concurrency with optional queue backpressure.
 - **hedgePlugin (optional)**: race multiple attempts and cancel losers when a winner is found.
 - **circuitPlugin (optional)**: fail fast after repeated failures.
 - **requestShortcutsPlugin (optional)**: HTTP method shortcuts on the client (`.get()` / `.post()` / `.put()` / `.patch()` / `.delete()` / `.head()` / `.options()`).
@@ -347,6 +349,7 @@ See [deduplication.md](./docs/deduplication.md) for full details.
 | Plugin Architecture  | ❌ Not available                                        | ⚠️ Interceptors only           | ⚠️ Hook-based extensions                      | ✅ First-class plugin pipeline (optional built-in + custom plugins)                    |
 | Circuit Breaker      | ❌ Not available                                        | ❌ Manual or plugins           | ❌ Manual                                     | ✅ Automatic failure protection                                                        |
 | Deduplication        | ❌ Not available                                        | ❌ Not available               | ❌ Not available                              | ✅ Optional via `dedupePlugin()`                                                       |
+| Bulkheading          | ❌ Not available                                        | ❌ Not available               | ❌ Not available                              | ✅ Optional via `bulkheadPlugin()`                                                     |
 | Request Hedging      | ❌ Not available                                        | ❌ Not available               | ❌ Not available                              | ✅ Optional via `hedgePlugin()` (tail latency reduction)                               |
 | Request Monitoring   | ❌ Manual tracking                                      | ❌ Manual tracking             | ❌ Manual tracking                            | ✅ Built-in pending requests                                                           |
 | Error Types          | ❌ Generic errors                                       | ⚠️ HTTP errors only            | ✅ Specific error classes                     | ✅ Specific error classes                                                              |
@@ -357,7 +360,7 @@ See [deduplication.md](./docs/deduplication.md) for full details.
 | Download Progress    | ❌ Manual ReadableStream                                | ❌ Manual                      | ✅ `onDownloadProgress` callback              | ✅ Optional via `downloadProgressPlugin()`                                             |
 | Custom Fetch Support | ❌ No (global only)                                     | ❌ No                          | ❌ No                                         | ✅ Yes (wrap any fetch-compatible implementation, including framework or custom fetch) |
 
-Note: built-in plugins in ffetch are opt-in. Use `dedupePlugin()` for deduplication, `circuitPlugin()` for circuit breaking, `requestShortcutsPlugin()` for client HTTP method shortcuts, `responseShortcutsPlugin()` for request-promise parsing shortcuts, and `downloadProgressPlugin()` for streaming download progress. Bundle size: ~3kb core, additional optional plugin imports are tree-shakeable.
+Note: built-in plugins in ffetch are opt-in. Use `bulkheadPlugin()` for concurrency isolation and backpressure, `dedupePlugin()` for deduplication, `circuitPlugin()` for circuit breaking, `hedgePlugin()` for tail-latency racing, `requestShortcutsPlugin()` for client HTTP method shortcuts, `responseShortcutsPlugin()` for request-promise parsing shortcuts, and `downloadProgressPlugin()` for streaming download progress. Bundle size: ~3kb core, additional optional plugin imports are tree-shakeable.
 
 ### Try ffetch in Action
 

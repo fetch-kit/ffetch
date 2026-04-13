@@ -57,11 +57,23 @@ describe('circuit plugin parity', () => {
     )
     expect(client.circuitOpen).toBe(true)
     expect(onCircuitOpen).toHaveBeenCalledTimes(1)
+    expect(onCircuitOpen).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        request: expect.any(Request),
+        reason: expect.objectContaining({ type: 'threshold-reached' }),
+      })
+    )
 
     await expect(client('https://example.com/blocked')).rejects.toThrow(
       CircuitOpenError
     )
     expect(onCircuitOpen).toHaveBeenCalledTimes(2)
+    expect(onCircuitOpen).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        request: expect.any(Request),
+        reason: { type: 'already-open' },
+      })
+    )
 
     await new Promise((resolve) => setTimeout(resolve, 70))
 
@@ -71,6 +83,12 @@ describe('circuit plugin parity', () => {
     expect(recovered.status).toBe(200)
     expect(client.circuitOpen).toBe(false)
     expect(onCircuitClose).toHaveBeenCalledTimes(1)
+    expect(onCircuitClose).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.any(Request),
+        response: expect.any(Response),
+      })
+    )
   })
 
   it('treats HTTP 429 as a circuit failure signal', async () => {
@@ -174,6 +192,15 @@ describe('circuit plugin parity', () => {
       CircuitOpenError
     )
     expect(onCircuitOpen).toHaveBeenCalledTimes(1)
+    expect(onCircuitOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.any(Request),
+        reason: expect.objectContaining({
+          type: 'threshold-reached',
+          error: expect.any(Error),
+        }),
+      })
+    )
     expect(client.circuitOpen).toBe(true)
 
     await new Promise((r) => setTimeout(r, 70))
@@ -181,6 +208,12 @@ describe('circuit plugin parity', () => {
     const recovered = await client('https://example.com/hooks-net-recover')
     expect(recovered.status).toBe(200)
     expect(onCircuitClose).toHaveBeenCalledTimes(1)
+    expect(onCircuitClose).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.any(Request),
+        response: expect.any(Response),
+      })
+    )
     expect(client.circuitOpen).toBe(false)
   })
 })

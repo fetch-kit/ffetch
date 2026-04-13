@@ -61,6 +61,7 @@ Order details per hook:
 ```typescript
 import { createClient } from '@fetchkit/ffetch'
 import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
+import { bulkheadPlugin } from '@fetchkit/ffetch/plugins/bulkhead'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
 import { hedgePlugin } from '@fetchkit/ffetch/plugins/hedge'
 import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
@@ -69,6 +70,7 @@ import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progre
 
 const client = createClient({
   plugins: [
+    bulkheadPlugin({ maxConcurrent: 10, maxQueue: 50 }),
     dedupePlugin({ ttl: 30_000, sweepInterval: 5_000 }),
     hedgePlugin({ delay: 50 }),
     circuitPlugin({ threshold: 5, reset: 30_000 }),
@@ -80,6 +82,18 @@ const client = createClient({
   ],
 })
 ```
+
+The bulkhead plugin limits per-client concurrency and applies backpressure with a bounded queue:
+
+```typescript
+const client = createClient({
+  plugins: [bulkheadPlugin({ maxConcurrent: 10, maxQueue: 50 })],
+})
+
+const response = await client('https://example.com/data')
+```
+
+> **Warning:** Bulkhead and retries can amplify queue pressure, because each retry attempt must reacquire a bulkhead slot. Keep retry counts conservative when using small bulkhead limits.
 
 The hedge plugin races multiple concurrent attempts and cancels losers when the first acceptable response wins:
 

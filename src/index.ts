@@ -12,6 +12,7 @@ export { createClient } from './client'
 export {
   TimeoutError,
   CircuitOpenError,
+  BulkheadFullError,
   AbortError,
   RetryLimitError,
   NetworkError,

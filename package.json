@@ -32,6 +32,11 @@
       "import": "./dist/plugins/dedupe.js",
       "require": "./dist/plugins/dedupe.cjs"
     },
+    "./plugins/bulkhead": {
+      "types": "./dist/plugins/bulkhead.d.ts",
+      "import": "./dist/plugins/bulkhead.js",
+      "require": "./dist/plugins/bulkhead.cjs"
+    },
     "./plugins/hedge": {
       "types": "./dist/plugins/hedge.d.ts",
       "import": "./dist/plugins/hedge.js",

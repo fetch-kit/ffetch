@@ -5,6 +5,7 @@ export default defineConfig([
     entry: [
       'src/index.ts',
       'src/plugins/dedupe.ts',
+      'src/plugins/bulkhead.ts',
       'src/plugins/circuit.ts',
       'src/plugins/hedge.ts',
       'src/plugins/response-shortcuts.ts',

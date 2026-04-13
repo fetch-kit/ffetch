@@ -231,6 +231,12 @@ const client = createClient({
     circuitPlugin({
       threshold: 5, // Open after 5 consecutive failures
       reset: 30_000, // Close after 30 seconds
+      onCircuitOpen: ({ request, reason }) => {
+        console.warn('Circuit open:', request.url, reason.type)
+      },
+      onCircuitClose: ({ request, response }) => {
+        console.info('Circuit closed:', request.url, response.status)
+      },
     }),
   ],
 })
@@ -240,6 +246,8 @@ const client = createClient({
 
 - `threshold`: _(number)_ — How many consecutive failures will "trip" (open) the circuit. Example: `5` means after 5 failures, the circuit opens.
 - `reset`: _(number, ms)_ — How long (in milliseconds) to wait before closing the circuit and allowing requests again. Example: `30_000` is 30 seconds.
+- `onCircuitOpen`: _(function)_ — Receives `{ request, reason }`. `reason.type` is `'threshold-reached'` or `'already-open'`.
+- `onCircuitClose`: _(function)_ — Receives `{ request, response }` when the circuit closes on a successful recovery probe.
 
 ### Advanced Circuit Breaker Patterns
 
