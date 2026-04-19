@@ -11,6 +11,7 @@ export default defineConfig([
       'src/plugins/response-shortcuts.ts',
       'src/plugins/request-shortcuts.ts',
       'src/plugins/download-progress.ts',
+      'src/plugins/context-id.ts',
     ],
     format: ['esm', 'cjs'],
     dts: true,

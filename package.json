@@ -61,6 +61,11 @@
       "types": "./dist/plugins/download-progress.d.ts",
       "import": "./dist/plugins/download-progress.js",
       "require": "./dist/plugins/download-progress.cjs"
+    },
+    "./plugins/context-id": {
+      "types": "./dist/plugins/context-id.d.ts",
+      "import": "./dist/plugins/context-id.js",
+      "require": "./dist/plugins/context-id.cjs"
     }
   },
   "files": [

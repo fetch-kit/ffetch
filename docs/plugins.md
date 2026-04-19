@@ -60,16 +60,17 @@ Order details per hook:
 
 The sections below are grouped by learning priority (convenience first, resilience second), not by runtime execution order. For execution order semantics, see [Plugin Order](#plugin-order).
 
-| Category    | Plugins                                                                       |
-| ----------- | ----------------------------------------------------------------------------- |
-| Convenience | `requestShortcutsPlugin`, `responseShortcutsPlugin`, `downloadProgressPlugin` |
-| Resilience  | `dedupePlugin`, `circuitPlugin`, `bulkheadPlugin`, `hedgePlugin`              |
+| Category    | Plugins                                                                             |
+| ----------- | ----------------------------------------------------------------------------------- |
+| Convenience | `requestShortcutsPlugin`, `responseShortcutsPlugin`, `downloadProgressPlugin`       |
+| Resilience  | `contextIdPlugin`, `dedupePlugin`, `circuitPlugin`, `bulkheadPlugin`, `hedgePlugin` |
 
 ```typescript
 import { createClient } from '@fetchkit/ffetch'
 import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
 import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progress'
+import { contextIdPlugin } from '@fetchkit/ffetch/plugins/context-id'
 import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
 import { bulkheadPlugin } from '@fetchkit/ffetch/plugins/bulkhead'
@@ -82,6 +83,7 @@ const client = createClient({
     downloadProgressPlugin((progress) => {
       console.log(`${(progress.percent * 100).toFixed(1)}%`)
     }),
+    contextIdPlugin(),
     dedupePlugin({ ttl: 30_000, sweepInterval: 5_000 }),
     circuitPlugin({ threshold: 5, reset: 30_000 }),
     bulkheadPlugin({ maxConcurrent: 10, maxQueue: 50 }),
@@ -129,6 +131,16 @@ const client = createClient({
 ```
 
 ### Resilience plugins
+
+The context ID plugin injects a stable request context identifier and keeps it consistent across retries and hedged attempts:
+
+```typescript
+const client = createClient({
+  plugins: [contextIdPlugin()],
+})
+```
+
+See [Context ID Plugin](./context-id.md) for configuration details.
 
 The dedupe plugin collapses identical in-flight requests:
 

@@ -66,6 +66,7 @@ ffetch uses a plugin architecture for optional features, so you only include wha
 - **Bulkhead plugin (optional, prebuilt)** – cap concurrency and queue depth per client instance
 - **Circuit breaker plugin (optional, prebuilt)** – automatic failure protection
 - **Hedge plugin (optional, prebuilt)** – race parallel attempts to reduce tail latency
+- **Context ID plugin (optional, prebuilt)** – inject a stable context ID header across retries/hedges for correlation
 - **Deduplication plugin (optional, prebuilt)** – automatic deduping of in-flight identical requests
 - **Request shortcuts plugin (optional, prebuilt)** – call `client.get(url)` / `.post()` / `.put()` / `.patch()` / `.delete()` directly on the client
 - **Response shortcuts plugin (optional, prebuilt)** – call `client(url).json()` / `.text()` / `.blob()` directly on the request promise
@@ -81,6 +82,7 @@ All plugins are tree-shakeable — import only what you use.
 - **bulkheadPlugin (optional)**: cap in-flight concurrency with optional queue backpressure.
 - **hedgePlugin (optional)**: race multiple attempts and cancel losers when a winner is found.
 - **circuitPlugin (optional)**: fail fast after repeated failures.
+- **contextIdPlugin (optional)**: inject a stable request context ID (for example in `x-context-id`) across retries and hedges.
 - **requestShortcutsPlugin (optional)**: HTTP method shortcuts on the client (`.get()` / `.post()` / `.put()` / `.patch()` / `.delete()` / `.head()` / `.options()`).
 - **responseShortcutsPlugin (optional)**: use `client(url).json()` / `.text()` / `.blob()` style parsing.
 - **downloadProgressPlugin (optional)**: stream download progress via `onProgress(progress, chunk)` callback.
@@ -137,6 +139,7 @@ const users = (await response.json()) as User[]
 import { createClient } from '@fetchkit/ffetch'
 import { dedupePlugin } from '@fetchkit/ffetch/plugins/dedupe'
 import { circuitPlugin } from '@fetchkit/ffetch/plugins/circuit'
+import { contextIdPlugin } from '@fetchkit/ffetch/plugins/context-id'
 import { requestShortcutsPlugin } from '@fetchkit/ffetch/plugins/request-shortcuts'
 import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-shortcuts'
 
@@ -148,9 +151,11 @@ const api = createClient({
     dedupePlugin({ ttl: 30_000, sweepInterval: 5_000 }),
     // 2) Optional: open the circuit after repeated failures
     circuitPlugin({ threshold: 5, reset: 30_000 }),
-    // 3) Optional: enable request-promise parsing shortcuts
+    // 3) Optional: inject stable correlation context IDs
+    contextIdPlugin(),
+    // 4) Optional: enable request-promise parsing shortcuts
     responseShortcutsPlugin(),
-    // 4) Optional: enable client HTTP method shortcuts
+    // 5) Optional: enable client HTTP method shortcuts
     requestShortcutsPlugin(),
   ],
 })
@@ -169,6 +174,7 @@ What this setup gives you:
 - **Operational safety**: retries with timeout defaults.
 - **Lower duplicate traffic (optional)**: concurrent identical requests share one in-flight call.
 - **Faster failure recovery (optional)**: circuit breaker blocks repeated failing calls.
+- **Better observability correlation (optional)**: stable request context IDs across retries and hedges.
 - **Cleaner request ergonomics (optional)**: `client.get(url)` / `.post(url, init)` style shortcuts.
 - **Cleaner parsing (optional)**: `client(url).json()` style shortcuts.
 
