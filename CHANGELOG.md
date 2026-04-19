@@ -1,5 +1,12 @@
 # ffetch
 
+## 5.4.0
+
+### Minor Changes
+
+- 0aa51b5: Added
+  - Context id plugin
+
 ## 5.3.0
 
 ### Minor Changes
