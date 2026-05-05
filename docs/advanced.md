@@ -73,7 +73,7 @@ client.pendingRequests.forEach((pending) => {
 
 #### Signal Combination Logic
 
-ffetch automatically combines user, timeout, and transformRequest signals. If your environment does not support `AbortSignal.any`, ffetch uses an internal controller to ensure aborts are handled consistently.
+ffetch automatically combines user, timeout, and transformRequest signals. If your environment does not support `AbortSignal.any`, install a polyfill before using ffetch (there is no fallback for signal combination).
 
 #### 1. Abort All Pending Requests
 
