@@ -1,5 +1,12 @@
 # ffetch
 
+## 5.4.1
+
+### Patch Changes
+
+- 5617c07: Documentation
+  - Clarify AbortSignal.any requirement in advanced guide
+
 ## 5.4.0
 
 ### Minor Changes
