@@ -1,5 +1,12 @@
 # ffetch
 
+## 5.4.2
+
+### Patch Changes
+
+- 4e50d1d: Documentation
+  - Node Weekly mention added
+
 ## 5.4.1
 
 ### Patch Changes
