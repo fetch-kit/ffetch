@@ -46,7 +46,7 @@ ffetch uses a plugin architecture for optional features, so you only include wha
   - [CDN Usage](#cdn-usage)
   - [Deduplication Limitations](#deduplication-limitations)
   - [Fetch vs. Axios vs. ky vs. `ffetch`](#fetch-vs-axios-vs-ky-vs-ffetch)
-    - [Try ffetch in Action](#try-ffetch-in-action)
+  - [Try ffetch in Action](#try-ffetch-in-action)
   - [Join the Community](#join-the-community)
   - [Contributing](#contributing)
   - [License](#license)
@@ -373,9 +373,11 @@ See [deduplication.md](./docs/deduplication.md) for full details.
 
 Note: built-in plugins in ffetch are opt-in. Use `bulkheadPlugin()` for concurrency isolation and backpressure, `dedupePlugin()` for deduplication, `circuitPlugin()` for circuit breaking, `hedgePlugin()` for tail-latency racing, `requestShortcutsPlugin()` for client HTTP method shortcuts, `responseShortcutsPlugin()` for request-promise parsing shortcuts, and `downloadProgressPlugin()` for streaming download progress. Bundle size: ~3kb core, additional optional plugin imports are tree-shakeable.
 
-### Try ffetch in Action
+## Try ffetch in Action
 
 Want to see these clients in practice? Check out [ffetch-demo](https://github.com/fetch-kit/ffetch-demo) for working examples and side-by-side comparisons of how ffetch simplifies common fetch patterns.
+
+📰 Featured in [Node Weekly #594](https://nodeweekly.com/issues/594)
 
 ## Join the Community
 
