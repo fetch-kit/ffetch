@@ -84,6 +84,7 @@
     "test:ci": "vitest --run --coverage",
     "lint": "eslint src --ext .ts",
     "format": "prettier -w src",
+    "version": "changeset version",
     "prepublishOnly": "npm run build && npm run test:ci"
   },
   "devDependencies": {
