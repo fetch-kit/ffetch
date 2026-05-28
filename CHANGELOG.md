@@ -1,5 +1,11 @@
 # ffetch
 
+## 5.4.9
+
+### Patch Changes
+
+- a808121: Fixed: Discord announcement is inlined in publish.yml action
+
 ## 5.4.8
 
 ### Patch Changes
