@@ -1,5 +1,11 @@
 # ffetch
 
+## 5.4.4
+
+### Patch Changes
+
+- 5cc69e6: Retry npm publish with corrected repository url
+
 ## 5.4.3
 
 ### Patch Changes
