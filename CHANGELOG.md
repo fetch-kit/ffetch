@@ -1,5 +1,11 @@
 # ffetch
 
+## 5.4.5
+
+### Patch Changes
+
+- d67f74a: Trigger retry with Node24 fix
+
 ## 5.4.4
 
 ### Patch Changes
