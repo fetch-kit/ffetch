@@ -1,5 +1,11 @@
 # ffetch
 
+## 5.4.8
+
+### Patch Changes
+
+- 8da944a: fix: discord announcement trigger
+
 ## 5.4.7
 
 ### Patch Changes
