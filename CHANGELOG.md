@@ -1,5 +1,11 @@
 # ffetch
 
+## 5.4.6
+
+### Patch Changes
+
+- 285f68c: ci: fix action versions and registry-url placement
+
 ## 5.4.5
 
 ### Patch Changes
