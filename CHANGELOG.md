@@ -1,5 +1,12 @@
 # ffetch
 
+## 5.4.3
+
+### Patch Changes
+
+- f523b31: test: verify automated publishing setup
+- 70bcea4: Test automated publishing workflow
+
 ## 5.4.2
 
 ### Patch Changes
