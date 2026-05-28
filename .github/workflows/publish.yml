@@ -78,7 +78,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ steps.package.outputs.version }}" -m "Release v${{ steps.package.outputs.version }}"
-          git push origin "v${{ steps.package.outputs.version }}"
+          git push https://x-access-token:${{ secrets.DISCORD_PAT }}@github.com/${{ github.repository }} "v${{ steps.package.outputs.version }}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
