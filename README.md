@@ -393,4 +393,4 @@ Got questions, want to discuss features, or share examples? Join the **Fetch-Kit
 
 ## License
 
-MIT © 2025 gkoos
+MIT © 2025- gkoos
