@@ -12,7 +12,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/fetch-kit/ffetch.git"
+    "url": "git+https://github.com/fetch-kit/ffetch.git"
   },
   "homepage": "https://github.com/fetch-kit/ffetch#readme",
   "bugs": "https://github.com/fetch-kit/ffetch/issues",
