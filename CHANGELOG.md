@@ -1,5 +1,11 @@
 # ffetch
 
+## 5.4.7
+
+### Patch Changes
+
+- d084935: chore: changeset created
+
 ## 5.4.6
 
 ### Patch Changes
