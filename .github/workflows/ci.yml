@@ -9,6 +9,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: npm
+      - run: npm config list && echo "NODE_ENV=$NODE_ENV"
       - run: npm ci
       - run: npm run lint
       - run: npm run test:ci
