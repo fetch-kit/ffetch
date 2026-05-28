@@ -1,0 +1,40 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default: 7 days
+    groups:
+      typescript:
+        patterns:
+          - "typescript"
+          - "@types/node"
+          - "tsup"
+      testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "happy-dom"
+      linting:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "@typescript-eslint/*"
+          - "prettier"
+      release-tooling:
+        patterns:
+          - "@changesets/*"
+          - "husky"
+          - "lint-staged"
+          - "jsr"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"
