@@ -22,7 +22,7 @@ jobs:
           echo "LCOV file first 10 lines:"
           head -10 coverage/lcov.info
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           file: ./coverage/lcov.info
           fail_ci_if_error: false
