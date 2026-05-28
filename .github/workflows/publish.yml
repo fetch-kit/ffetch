@@ -78,10 +78,26 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ steps.package.outputs.version }}" -m "Release v${{ steps.package.outputs.version }}"
-          git push https://x-access-token:${{ secrets.DISCORD_PAT }}@github.com/${{ github.repository }} "v${{ steps.package.outputs.version }}"
+          git push origin "v${{ steps.package.outputs.version }}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.package.outputs.version }}
           generate_release_notes: true
+
+      - name: Announce release to Discord
+        run: |
+          TAG="v${{ steps.package.outputs.version }}"
+          VERSION="${{ steps.package.outputs.version }}"
+
+          NOTES=$(sed -n "/^## $VERSION$/,/^## /{ /^## /!p }" CHANGELOG.md | sed '/^[[:space:]]*$/d')
+
+          if [ -z "$NOTES" ]; then
+            NOTES="(no changelog entry found for $TAG)"
+          fi
+
+          PAYLOAD=$(jq -Rn --arg tag "$TAG" --arg repo "${{ github.repository }}" --arg notes "$NOTES" \
+            '{content: ("**New fetch-kit Release**\nRepository: \($repo) - version: \($tag)\n```\n\($notes)\n```")}')
+
+          curl -sS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" ${{ secrets.DISCORD_WEBHOOK }}
