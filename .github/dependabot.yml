@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: weekly
     cooldown:
-      default: 7 days
+      default-days: 7
     groups:
       typescript:
         patterns:
