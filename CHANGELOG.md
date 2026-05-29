@@ -1,5 +1,11 @@
 # ffetch
 
+## 5.4.13
+
+### Patch Changes
+
+- 9dc55ee: Fixed: use CHANGESETS_TOKEN PAT to trigger CI on version PRs
+
 ## 5.4.12
 
 ### Patch Changes
