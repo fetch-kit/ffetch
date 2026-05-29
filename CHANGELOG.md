@@ -1,71 +1,24 @@
 # ffetch
 
-## 5.4.13
+## 5.4.9 – 5.4.13
 
 ### Patch Changes
 
-- 9dc55ee: Fixed: use CHANGESETS_TOKEN PAT to trigger CI on version PRs
+Internal CI/CD infrastructure releases. No functional changes.
 
-## 5.4.12
+- ci: automated publishing pipeline setup (Node 24, npm Trusted Publishing, OIDC)
+- ci: GitHub Actions pinned to commit SHAs
+- ci: CodeQL, Dependabot, OpenSSF Scorecard, SBOM generation configured
+- ci: fine-grained PAT for changeset version PRs to trigger CI
+- docs: README updated with security section and OpenSSF Scorecard badge
 
-### Patch Changes
-
-- aab0230: test: trigger release
-
-## 5.4.11
-
-### Patch Changes
-
-- 36a70ef: docs: readme updated with security section
-
-## 5.4.10
+## 5.4.3 – 5.4.8
 
 ### Patch Changes
 
-- b1ecd57: docs: readme updated with security section
+Internal CI/CD infrastructure releases. No functional changes.
 
-## 5.4.9
-
-### Patch Changes
-
-- a808121: Fixed: Discord announcement is inlined in publish.yml action
-
-## 5.4.8
-
-### Patch Changes
-
-- 8da944a: fix: discord announcement trigger
-
-## 5.4.7
-
-### Patch Changes
-
-- d084935: chore: changeset created
-
-## 5.4.6
-
-### Patch Changes
-
-- 285f68c: ci: fix action versions and registry-url placement
-
-## 5.4.5
-
-### Patch Changes
-
-- d67f74a: Trigger retry with Node24 fix
-
-## 5.4.4
-
-### Patch Changes
-
-- 5cc69e6: Retry npm publish with corrected repository url
-
-## 5.4.3
-
-### Patch Changes
-
-- f523b31: test: verify automated publishing setup
-- 70bcea4: Test automated publishing workflow
+- ci: automated publishing pipeline initial setup and stabilisation
 
 ## 5.4.2
 

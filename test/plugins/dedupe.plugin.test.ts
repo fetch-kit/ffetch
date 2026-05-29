@@ -170,6 +170,46 @@ describe('dedupe plugin parity', () => {
     expect(seenSignal).toBe(controller.signal)
   })
 
+  it('allows all deduped callers to consume the response body independently', async () => {
+    const deferred = createDeferred<Response>()
+    global.fetch = vi.fn().mockReturnValue(deferred.promise)
+
+    const client = createClient({ plugins: [dedupePlugin()] })
+
+    const p1 = client('https://example.com/body')
+    const p2 = client('https://example.com/body')
+
+    deferred.resolve(new Response(JSON.stringify({ value: 42 }), { status: 200 }))
+
+    const [r1, r2] = await Promise.all([p1, p2])
+    const [d1, d2] = await Promise.all([r1.json(), r2.json()])
+
+    expect(d1).toEqual({ value: 42 })
+    expect(d2).toEqual({ value: 42 })
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows three deduped callers to consume the response body independently', async () => {
+    const deferred = createDeferred<Response>()
+    global.fetch = vi.fn().mockReturnValue(deferred.promise)
+
+    const client = createClient({ plugins: [dedupePlugin()] })
+
+    const p1 = client('https://example.com/body3')
+    const p2 = client('https://example.com/body3')
+    const p3 = client('https://example.com/body3')
+
+    deferred.resolve(new Response(JSON.stringify({ value: 99 }), { status: 200 }))
+
+    const [r1, r2, r3] = await Promise.all([p1, p2, p3])
+    const [d1, d2, d3] = await Promise.all([r1.json(), r2.json(), r3.json()])
+
+    expect(d1).toEqual({ value: 99 })
+    expect(d2).toEqual({ value: 99 })
+    expect(d3).toEqual({ value: 99 })
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('propagates one underlying failure to all deduped callers', async () => {
     const deferred = createDeferred<Response>()
     global.fetch = vi.fn().mockReturnValue(deferred.promise)

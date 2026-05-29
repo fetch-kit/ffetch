@@ -56,6 +56,14 @@ const client = createClient({
 - TTL eviction does not reject already in-flight request promises.
 - Stream/FormData request bodies are skipped by the default hash strategy.
 
+## Response Body Consumption
+
+Each deduplicated caller receives an independent `Response` — the first caller gets the original, and each additional concurrent caller receives a clone. This means every caller can consume the response body (`.json()`, `.text()`, `.arrayBuffer()`, etc.) independently without conflict.
+
+Note: `response.url` and `response.redirected` are not preserved on cloned responses (they are read-only on constructed `Response` objects). This is a browser/runtime constraint, not specific to ffetch. In practice, API responses rarely require these properties.
+
+If you need auth headers (e.g. `Authorization`, `Cookie`) to be part of the dedupe key, provide a custom `hashFn` that includes them — the default hash uses method, URL, and body only.
+
 ## Defaults
 
 - `hashFn`: `dedupeRequestHash`
