@@ -41,6 +41,5 @@ jobs:
           version: npm run version
           commit: 'chore(release): version packages'
           title: 'chore(release): version packages'
-          commitMode: github-api
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
