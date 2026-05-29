@@ -1,5 +1,12 @@
 # ffetch
 
+## 5.5.1
+
+### Patch Changes
+
+- abc236c: Fixed
+  - SBOM attachment to GitHub release assets
+
 ## 5.5.0
 
 ### Minor Changes
