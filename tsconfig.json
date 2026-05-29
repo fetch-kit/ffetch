@@ -11,7 +11,8 @@
     "declaration": true,
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["vitest"]
+    "types": ["vitest"],
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*"],
   "exclude": ["dist", "node_modules", "**/*.test.ts"]
