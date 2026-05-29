@@ -95,7 +95,14 @@ jobs:
         with:
           format: spdx-json
           output-file: sbom.spdx.json
-          upload-release-assets: true
+          upload-release-assets: false
+          upload-artifact: false
+
+      - name: Upload SBOM to release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
+        with:
+          tag_name: v${{ steps.package.outputs.version }}
+          files: sbom.spdx.json
 
       - name: Announce release to Discord
         run: |
