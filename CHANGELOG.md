@@ -1,5 +1,16 @@
 # ffetch
 
+## 5.5.0
+
+### Minor Changes
+
+- f3be91f: Fixed
+  - dedupePlugin: each deduplicated caller now receives an independent Response clone, preventing "body already used" errors when multiple concurrent callers consume the response body
+
+  Documentation
+  - deduplication: explained response cloning behaviour and auth header considerations for custom hashFn
+  - advanced: clarified that timeout acts as total duration cap including retry wait periods
+
 ## 5.4.9 – 5.4.13
 
 ### Patch Changes
