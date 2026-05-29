@@ -1,5 +1,11 @@
 # ffetch
 
+## 5.4.10
+
+### Patch Changes
+
+- b1ecd57: docs: readme updated with security section
+
 ## 5.4.9
 
 ### Patch Changes
