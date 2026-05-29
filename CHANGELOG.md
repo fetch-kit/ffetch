@@ -1,5 +1,11 @@
 # ffetch
 
+## 5.4.12
+
+### Patch Changes
+
+- aab0230: test: trigger release
+
 ## 5.4.11
 
 ### Patch Changes
