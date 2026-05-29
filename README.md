@@ -49,6 +49,7 @@ ffetch uses a plugin architecture for optional features, so you only include wha
   - [Fetch vs. Axios vs. ky vs. `ffetch`](#fetch-vs-axios-vs-ky-vs-ffetch)
   - [Try ffetch in Action](#try-ffetch-in-action)
   - [Join the Community](#join-the-community)
+  - [Security](#security)
   - [Contributing](#contributing)
   - [License](#license)
 
@@ -385,6 +386,23 @@ Want to see these clients in practice? Check out [ffetch-demo](https://github.co
 Got questions, want to discuss features, or share examples? Join the **Fetch-Kit Discord server**:
 
 [![Discord](https://img.shields.io/badge/Discord-Join_Fetch--Kit-7289DA?logo=discord&logoColor=white)](https://discord.gg/sdyPBPCDUg)
+
+## Security
+
+`ffetch` is scored at **7.4/10** by the [OpenSSF Scorecard](https://securityscorecards.dev/), an automated security health check for open source projects.
+
+The score reflects:
+- ✅ Pinned GitHub Actions dependencies
+- ✅ CodeQL static analysis on every PR and push to main
+- ✅ Dependabot for dependency updates and security alerts
+- ✅ npm publish with OIDC provenance attestations
+- ✅ Security policy and private vulnerability reporting
+- ✅ Branch protection on `main`
+- ✅ SPDX SBOM attached to every release
+
+The score is capped below 10 due to being a solo-maintained project (no mandatory code review or multiple org contributors). [View the full breakdown](https://scorecard.dev/viewer/?uri=github.com/fetch-kit/ffetch).
+
+To report a security vulnerability, see [SECURITY.md](./SECURITY.md).
 
 ## Contributing
 
