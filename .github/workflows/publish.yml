@@ -8,6 +8,8 @@ on:
       - 'package.json'
       - '!.changeset/**'
 
+permissions: read-all
+
 jobs:
   check-version:
     name: Check if version changed

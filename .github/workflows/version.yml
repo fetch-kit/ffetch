@@ -7,6 +7,8 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
+permissions: read-all
+
 jobs:
   version:
     name: Create Version PR
