@@ -4,10 +4,14 @@ import {
   type DedupeHashParams,
 } from '../dedupeRequestHash.js'
 
+type Waiter = {
+  resolve: (value: Response) => void
+  reject: (reason?: unknown) => void
+}
+
 type DedupeEntry = {
   promise: Promise<Response>
-  resolve: (value: Response | PromiseLike<Response>) => void
-  reject: (reason?: unknown) => void
+  waiters: Waiter[]
   createdAt: number
 }
 
@@ -80,51 +84,33 @@ export function dedupePlugin(options: DedupePluginOptions = {}): ClientPlugin {
 
       const existing = inFlight.get(key)
       if (existing) {
-        return existing.promise
+        return new Promise<Response>((resolve, reject) => {
+          existing.waiters.push({ resolve, reject })
+        })
       }
 
-      let settled = false
-      let resolveFn: (value: Response | PromiseLike<Response>) => void
-      let rejectFn: (reason?: unknown) => void
-
-      const placeholder = new Promise<Response>((resolve, reject) => {
-        resolveFn = (value) => {
-          if (!settled) {
-            settled = true
-            resolve(value)
-          }
-        }
-        rejectFn = (reason) => {
-          if (!settled) {
-            settled = true
-            reject(reason)
-          }
-        }
-      })
-      // Internal placeholder can reject before a consumer attaches handlers.
-      // Mark it observed to avoid unhandled-rejection noise.
-      placeholder.catch(() => undefined)
+      const waiters: Waiter[] = []
+      const actualPromise = next(ctx)
 
       inFlight.set(key, {
-        promise: placeholder,
-        resolve: resolveFn!,
-        reject: rejectFn!,
+        promise: actualPromise,
+        waiters,
         createdAt: Date.now(),
       })
       startSweeper()
 
-      const actualPromise = next(ctx)
-      const entry = inFlight.get(key)
-      if (entry) {
-        actualPromise.then(
-          (result) => entry.resolve(result),
-          (error) => entry.reject(error)
-        )
-        inFlight.set(key, {
-          ...entry,
-          promise: actualPromise,
-        })
-      }
+      actualPromise.then(
+        (result) => {
+          for (const waiter of waiters) {
+            waiter.resolve(result.clone())
+          }
+        },
+        (error) => {
+          for (const waiter of waiters) {
+            waiter.reject(error)
+          }
+        }
+      )
 
       return actualPromise.finally(() => {
         const current = inFlight.get(key)

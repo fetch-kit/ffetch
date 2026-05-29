@@ -189,6 +189,8 @@ If you override retry behavior, make sure your custom logic still handles `Retry
 // ffetch will wait until that date/time before retrying
 ```
 
+> **Note**: The `timeout` option acts as a total duration cap across the entire request lifecycle, including retry wait periods. If a server responds with a large `Retry-After` value and the combined wait would exceed the configured `timeout`, the timeout fires and the request throws a `TimeoutError` — the retry wait is interrupted immediately. To allow indefinite waits, set `timeout: 0`.
+
 ## Circuit Breaker Pattern
 
 The circuit breaker pattern protects your service from repeated failures by temporarily blocking requests after a threshold of consecutive errors. This helps prevent cascading failures and allows your system to recover gracefully.
