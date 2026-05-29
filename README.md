@@ -389,9 +389,8 @@ Got questions, want to discuss features, or share examples? Join the **Fetch-Kit
 
 ## Security
 
-`ffetch` is scored at **7.4/10** by the [OpenSSF Scorecard](https://securityscorecards.dev/), an automated security health check for open source projects.
+`ffetch` is scored at **7.4/10** by the [OpenSSF Scorecard](https://securityscorecards.dev/), an automated security health check for open source projects. This score reflects the commitment to security best practices and continuous improvement. Key security features include:
 
-The score reflects:
 - ✅ Pinned GitHub Actions dependencies
 - ✅ CodeQL static analysis on every PR and push to main
 - ✅ Dependabot for dependency updates and security alerts
