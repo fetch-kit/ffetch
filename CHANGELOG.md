@@ -1,5 +1,12 @@
 # ffetch
 
+## 5.5.3
+
+### Patch Changes
+
+- 9497a5c: Fixed
+  - DTS build by avoiding direct Buffer global usage in dedupe hash base64 encoding
+
 ## 5.5.2
 
 ### Patch Changes
