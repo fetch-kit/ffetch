@@ -167,7 +167,7 @@ export function createClient<
 
       let timeoutSignal: AbortSignal | undefined = undefined
       let combinedSignal: AbortSignal | undefined = undefined
-      let controller: AbortController | undefined = undefined
+      let controller: AbortController | undefined
 
       if (effectiveTimeout > 0) {
         timeoutSignal = createTimeoutSignal(effectiveTimeout)
@@ -348,9 +348,9 @@ export function createClient<
           }
           const retryErr = new RetryLimitError(
             typeof err === 'object' &&
-            err &&
-            'message' in err &&
-            typeof (err as { message?: unknown }).message === 'string'
+              err &&
+              'message' in err &&
+              typeof (err as { message?: unknown }).message === 'string'
               ? (err as { message: string }).message
               : 'Retry limit reached',
             err

@@ -20,7 +20,7 @@ export function dedupeRequestHash(
   params: DedupeHashParams
 ): string | undefined {
   const { method, url, body } = params
-  let bodyString = ''
+  let bodyString: string
   if (body instanceof FormData) {
     // Skip deduplication for FormData
     return undefined
