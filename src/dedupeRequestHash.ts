@@ -16,6 +16,30 @@ export type DedupeHashParams = {
   request?: Request
 }
 
+function toBase64(bytes: Uint8Array): string {
+  // Use Node Buffer when available, otherwise fall back to btoa for browser-like runtimes.
+  const maybeBuffer = (
+    globalThis as {
+      Buffer?: {
+        from(input: Uint8Array): { toString(encoding: string): string }
+      }
+    }
+  ).Buffer
+  if (maybeBuffer) {
+    return maybeBuffer.from(bytes).toString('base64')
+  }
+
+  let binary = ''
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+  if (typeof btoa === 'function') {
+    return btoa(binary)
+  }
+
+  throw new Error('Base64 encoding is not available in this runtime')
+}
+
 export function dedupeRequestHash(
   params: DedupeHashParams
 ): string | undefined {
@@ -34,9 +58,9 @@ export function dedupeRequestHash(
   } else if (body instanceof URLSearchParams) {
     bodyString = body.toString()
   } else if (body instanceof ArrayBuffer) {
-    bodyString = Buffer.from(body).toString('base64')
+    bodyString = toBase64(new Uint8Array(body))
   } else if (body instanceof Uint8Array) {
-    bodyString = Buffer.from(body).toString('base64')
+    bodyString = toBase64(body)
   } else if (body instanceof Blob) {
     bodyString = `[blob:${body.type}:${body.size}]`
   } else if (body == null) {
