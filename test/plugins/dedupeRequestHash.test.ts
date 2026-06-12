@@ -1,10 +1,18 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import {
   dedupeRequestHash,
   DedupeHashParams,
 } from '../../src/dedupeRequestHash'
 
 describe('dedupeRequestHash', () => {
+  const originalBuffer = (globalThis as { Buffer?: unknown }).Buffer
+  const originalBtoa = (globalThis as { btoa?: unknown }).btoa
+
+  afterEach(() => {
+    ;(globalThis as { Buffer?: unknown }).Buffer = originalBuffer
+    ;(globalThis as { btoa?: unknown }).btoa = originalBtoa
+  })
+
   it('returns undefined for FormData body', () => {
     const form = new FormData()
     form.append('foo', 'bar')
@@ -99,5 +107,37 @@ describe('dedupeRequestHash', () => {
     }
     const hash = dedupeRequestHash(params)
     expect(hash).toContain('[unserializable-body]')
+  })
+
+  it('falls back to btoa when Buffer is unavailable', () => {
+    ;(globalThis as { Buffer?: unknown }).Buffer = undefined
+    ;(globalThis as { btoa?: (input: string) => string }).btoa = (input) => {
+      if (input === 'abc') return 'YWJj'
+      throw new Error('unexpected btoa input')
+    }
+
+    const buf = new Uint8Array([97, 98, 99]).buffer
+    const params: DedupeHashParams = {
+      method: 'PUT',
+      url: 'https://example.com',
+      body: buf,
+    }
+
+    expect(dedupeRequestHash(params)).toBe('PUT|https://example.com|YWJj')
+  })
+
+  it('throws when neither Buffer nor btoa are available', () => {
+    ;(globalThis as { Buffer?: unknown }).Buffer = undefined
+    ;(globalThis as { btoa?: unknown }).btoa = undefined
+
+    const params: DedupeHashParams = {
+      method: 'PATCH',
+      url: 'https://example.com',
+      body: new Uint8Array([1, 2, 3]),
+    }
+
+    expect(() => dedupeRequestHash(params)).toThrow(
+      'Base64 encoding is not available in this runtime'
+    )
   })
 })
