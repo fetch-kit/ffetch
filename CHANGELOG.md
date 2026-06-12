@@ -1,5 +1,13 @@
 # ffetch
 
+## 5.5.2
+
+### Patch Changes
+
+- 09e831b: Dependencies
+  - Updated linting, testing, and release-tooling dependencies
+  - Updated GitHub Actions dependency set
+
 ## 5.5.1
 
 ### Patch Changes
