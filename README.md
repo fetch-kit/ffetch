@@ -12,6 +12,9 @@
 
 # @fetchkit/ffetch
 
+
+> Part of the **[fetch-kit ecosystem](https://fetchkit.org)** - production-ready fetch utilities and chaos-testing tools.
+
 **A production-ready TypeScript-first drop-in replacement for native fetch, or any fetch-compatible implementation.**
 
 ffetch can wrap any fetch-compatible implementation (native fetch, node-fetch, undici, or framework-provided fetch), making it flexible for SSR, edge, and custom environments.
