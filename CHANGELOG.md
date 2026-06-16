@@ -1,5 +1,12 @@
 # ffetch
 
+## 5.5.4
+
+### Patch Changes
+
+- 9d6df81: Fixed
+  - Clone request on each retry attempt to prevent body-already-used error when retrying POST requests with a body
+
 ## 5.5.3
 
 ### Patch Changes
