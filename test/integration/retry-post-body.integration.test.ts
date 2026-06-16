@@ -1,10 +1,3 @@
-// @vitest-environment node
-// This test MUST run in the Node.js environment (not happy-dom) because only
-// Node.js/undici enforces the Fetch API spec rule that constructing a new Request
-// from an already-consumed Request throws:
-//   "Cannot construct a Request with a Request object that has already been used."
-// happy-dom silently copies the body, masking the regression.
-
 import { createServer } from 'node:http'
 import type { Server, IncomingMessage, ServerResponse } from 'node:http'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'

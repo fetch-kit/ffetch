@@ -461,7 +461,7 @@ describe('Retry-After header', () => {
         get: (name: string) => (name === 'Retry-After' ? '2' : undefined),
       },
     })
-    const ctx = { attempt: 1, request: new Request('x'), response }
+    const ctx = { attempt: 1, request: new Request('https://example.com'), response }
     const delay =
       typeof defaultDelay === 'function' ? defaultDelay(ctx) : defaultDelay
     expect(delay).toBe(2000)
@@ -480,7 +480,7 @@ describe('Retry-After header', () => {
           get: (name: string) => (name === 'Retry-After' ? date : undefined),
         },
       })
-      const ctx = { attempt: 1, request: new Request('x'), response }
+      const ctx = { attempt: 1, request: new Request('https://example.com'), response }
       const delay =
         typeof defaultDelay === 'function' ? defaultDelay(ctx) : defaultDelay
       expect(delay).toBe(5000)
