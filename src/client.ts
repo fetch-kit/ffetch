@@ -247,7 +247,7 @@ export function createClient<
                   )
                 }
               }
-              const reqWithSignal = new Request(requestForAttempt, {
+              const reqWithSignal = new Request(requestForAttempt.clone(), {
                 signal: dispatchSignal,
               })
               try {

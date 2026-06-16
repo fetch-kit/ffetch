@@ -319,6 +319,48 @@ describe('retry', () => {
     await expect(f('https://example.com')).rejects.toThrow('boom')
     expect(global.fetch).toHaveBeenCalledTimes(3)
   })
+
+  it('retries a POST request with a JSON body — succeeds on second attempt', async () => {
+    // Regression: without the fix, the retry throws
+    // "Cannot construct a Request with a Request object that has already been used."
+    // because the body of the original Request is consumed on the first attempt.
+    let calls = 0
+    global.fetch = vi.fn().mockImplementation(async () => {
+      calls++
+      if (calls === 1) return new Response('upstream error', { status: 500 })
+      return new Response('ok', { status: 200 })
+    })
+
+    const f = createClient({ retries: 1 })
+    const res = await f('https://example.com/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'value' }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(calls).toBe(2)
+  })
+
+  it('retries a POST request with a JSON body — all attempts return 500, no TypeError thrown', async () => {
+    // Regression: without the fix, the second attempt throws TypeError instead of
+    // returning the upstream 500 response.
+    let calls = 0
+    global.fetch = vi.fn().mockImplementation(async () => {
+      calls++
+      return new Response('upstream error', { status: 500 })
+    })
+
+    const f = createClient({ retries: 2 })
+    const res = await f('https://example.com/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'value' }),
+    })
+
+    expect(res.status).toBe(500)
+    expect(calls).toBe(3)
+  })
 })
 
 describe('retry with shouldRetry', () => {
