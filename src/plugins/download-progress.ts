@@ -24,14 +24,19 @@ export function downloadProgressPlugin(
       }
 
       const contentLength = response.headers.get('content-length')
-      const totalBytes = contentLength ? parseInt(contentLength, 10) : 0
+      const parsedContentLength =
+        contentLength && /^\d+$/.test(contentLength) ? Number(contentLength) : 0
+      const totalBytes = Number.isSafeInteger(parsedContentLength)
+        ? parsedContentLength
+        : 0
       let transferredBytes = 0
 
       const stream = response.body.pipeThrough(
         new TransformStream<Uint8Array, Uint8Array>({
           transform(chunk, controller) {
             transferredBytes += chunk.byteLength
-            const percent = totalBytes > 0 ? transferredBytes / totalBytes : 0
+            const percent =
+              totalBytes > 0 ? Math.min(transferredBytes / totalBytes, 1) : 0
             onProgress({ percent, transferredBytes, totalBytes }, chunk)
             controller.enqueue(chunk)
           },
