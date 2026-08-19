@@ -58,6 +58,9 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
       return new Promise<Response>((resolve, reject) => {
         let settled = false
         let launched = 1
+        let completed = 0
+        let fallbackResponse: Response | undefined
+        let lastError: unknown
         const timers: ReturnType<typeof setTimeout>[] = []
 
         function settle(winnerIndex: number, value: Response): void {
@@ -67,17 +70,22 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
           resolve(value)
         }
 
-        function tryReject(err: unknown): void {
-          Promise.allSettled(attempts).then((results) => {
-            if (settled) return
+        function finishWithoutWinner(): void {
+          if (settled || completed < launched) return
+
+          const allAttemptsLaunched = launched >= maxHedges + 1
+          if (fallbackResponse && allAttemptsLaunched) {
+            settle(attempts.length - 1, fallbackResponse)
+            return
+          }
+
+          // Preserve the existing fail-fast behavior for transport errors. A
+          // retryable HTTP response, however, waits for all scheduled hedges.
+          if (!fallbackResponse && lastError !== undefined) {
             settled = true
             timers.forEach(clearTimeout)
-            let lastError = err
-            for (const r of results) {
-              if (r.status === 'rejected') lastError = r.reason
-            }
             reject(lastError)
-          })
+          }
         }
 
         function onAttemptSettled(
@@ -86,32 +94,22 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
         ): void {
           if (settled) return
 
+          completed++
+
           if (result.status === 'fulfilled') {
             const res = result.value
-            // Treat 5xx and 429 as non-winners unless it's the last attempt
-            const isLastAttempt =
-              launched >= maxHedges + 1 && index === attempts.length - 1
-            if (
-              res.ok ||
-              (res.status < 500 && res.status !== 429) ||
-              isLastAttempt
-            ) {
+            // A retryable response is only a fallback. Its attempt index says
+            // when it was launched, not whether a better attempt is pending.
+            if (res.ok || (res.status < 500 && res.status !== 429)) {
               settle(index, res)
+              return
             }
-            // Otherwise wait for other attempts; if all settle without a winner
-            // the last settler will resolve with whatever is left
+            fallbackResponse = res
           } else {
-            // Check if all currently launched attempts have settled
-            Promise.allSettled(attempts).then((results) => {
-              if (settled) return
-              const pending = results.some(
-                (r) => r.status === ('pending' as never)
-              )
-              if (!pending) {
-                tryReject(result.reason)
-              }
-            })
+            lastError = result.reason
           }
+
+          finishWithoutWinner()
         }
 
         function watchAttempt(index: number): void {
@@ -128,9 +126,9 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
         for (let h = 1; h <= maxHedges; h++) {
           const hedgeIndex = h
           const t = setTimeout(() => {
+            launched++
             launch(hedgeIndex)
             watchAttempt(hedgeIndex)
-            launched++
           }, delayMs * hedgeIndex)
           timers.push(t)
         }
