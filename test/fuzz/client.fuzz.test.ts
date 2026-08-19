@@ -7,7 +7,9 @@ import {
   HttpError,
   NetworkError,
   RetryLimitError,
+  TimeoutError,
 } from '../../src/error.js'
+import type { Hooks } from '../../src/hooks.js'
 
 const httpStatusArbitrary = fc.constantFrom(200, 204, 400, 404, 429, 500, 503)
 
@@ -362,6 +364,211 @@ describe('core client fuzzing', () => {
         vi.useRealTimers()
       }),
       { numRuns: 250 }
+    )
+  })
+
+  it('settles once when generated cancellation sources race', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc
+          .record({
+            user: fc.boolean(),
+            transformed: fc.boolean(),
+            abortAll: fc.boolean(),
+          })
+          .filter(({ user, transformed, abortAll }) =>
+            Boolean(user || transformed || abortAll)
+          ),
+        async (sources) => {
+          vi.useFakeTimers()
+
+          const user = new AbortController()
+          const transformed = new AbortController()
+          const onAbort = vi.fn()
+          const onError = vi.fn()
+          const onComplete = vi.fn()
+          let physicalSettlements = 0
+          const client = createClient({
+            timeout: 0,
+            hooks: {
+              transformRequest: sources.transformed
+                ? (request) =>
+                    new Request(request, { signal: transformed.signal })
+                : undefined,
+              onAbort,
+              onError,
+              onComplete,
+            },
+            fetchHandler: async (input) => {
+              const signal = (input as Request).signal
+              return new Promise<Response>((_resolve, reject) => {
+                const abort = () => {
+                  physicalSettlements++
+                  reject(new DOMException('Aborted', 'AbortError'))
+                }
+                if (signal.aborted) abort()
+                else signal.addEventListener('abort', abort, { once: true })
+              })
+            },
+          })
+
+          const resultPromise = client('https://example.com/signal-race', {
+            signal: sources.user ? user.signal : undefined,
+          })
+          let error: unknown
+          resultPromise.catch((caught) => {
+            error = caught
+          })
+
+          for (
+            let turn = 0;
+            turn < 10 && client.pendingRequests.length === 0;
+            turn++
+          ) {
+            await Promise.resolve()
+          }
+
+          setTimeout(() => {
+            if (sources.transformed) transformed.abort()
+            if (sources.abortAll) client.abortAll()
+            if (sources.user) user.abort()
+          }, 0)
+          await vi.runAllTimersAsync()
+          await Promise.allSettled([resultPromise])
+
+          expect(error).toBeInstanceOf(AbortError)
+          if (sources.user) {
+            expect((error as Error).message).toBe('Request was aborted by user')
+          }
+          expect(physicalSettlements).toBe(1)
+          expect(onAbort).toHaveBeenCalledOnce()
+          expect(onError).toHaveBeenCalledOnce()
+          expect(onComplete).toHaveBeenCalledOnce()
+          expect(client.pendingRequests).toHaveLength(0)
+          expect(vi.getTimerCount()).toBe(0)
+
+          vi.useRealTimers()
+        }
+      ),
+      { numRuns: 500 }
+    )
+  })
+
+  it('gives user abort precedence when it races the overall timeout', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc
+          .record({ user: fc.boolean(), timeout: fc.boolean() })
+          .filter(({ user, timeout }) => user || timeout),
+        async (sources) => {
+          vi.useFakeTimers()
+
+          const originalTimeout = AbortSignal.timeout
+          const timeout = new AbortController()
+          const user = new AbortController()
+          AbortSignal.timeout = (() =>
+            timeout.signal) as typeof AbortSignal.timeout
+
+          try {
+            const client = createClient({
+              timeout: 1,
+              fetchHandler: async (input) => {
+                const signal = (input as Request).signal
+                return new Promise<Response>((_resolve, reject) => {
+                  const abort = () =>
+                    reject(new DOMException('Aborted', 'AbortError'))
+                  if (signal.aborted) abort()
+                  else signal.addEventListener('abort', abort, { once: true })
+                })
+              },
+            })
+
+            const resultPromise = client('https://example.com/timeout-race', {
+              signal: user.signal,
+            })
+            let error: unknown
+            const observedResult = resultPromise.catch((caught) => {
+              error = caught
+            })
+            setTimeout(() => {
+              if (sources.timeout) timeout.abort()
+              if (sources.user) user.abort()
+            }, 0)
+            await vi.runAllTimersAsync()
+            await observedResult
+
+            if (sources.user) {
+              expect(error).toBeInstanceOf(AbortError)
+            } else {
+              expect(error).toBeInstanceOf(TimeoutError)
+            }
+            expect(client.pendingRequests).toHaveLength(0)
+            expect(vi.getTimerCount()).toBe(0)
+          } finally {
+            AbortSignal.timeout = originalTimeout
+            vi.useRealTimers()
+          }
+        }
+      ),
+      { numRuns: 250 }
+    )
+  })
+
+  it('cleans up requests when generated lifecycle hooks fail', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom(
+          'before',
+          'after',
+          'onComplete',
+          'transformRequest',
+          'transformResponse',
+          'onError',
+          'onRetry'
+        ),
+        fc.boolean(),
+        async (hookName, asynchronous) => {
+          const hookError = new Error(`generated ${hookName} failure`)
+          const calls = vi.fn()
+          const fail = asynchronous
+            ? async () => {
+                calls()
+                throw hookError
+              }
+            : () => {
+                calls()
+                throw hookError
+              }
+
+          const hooks: Hooks = {}
+          Object.assign(hooks, { [hookName]: fail })
+
+          let fetchCalls = 0
+          const client = createClient({
+            retries: hookName === 'onRetry' ? 1 : 0,
+            retryDelay: 0,
+            hooks,
+            fetchHandler: async () => {
+              fetchCalls++
+              if (hookName === 'onError') throw new Error('transport failure')
+              if (hookName === 'onRetry' && fetchCalls === 1) {
+                return new Response(null, { status: 503 })
+              }
+              return new Response(null)
+            },
+          })
+
+          const result = await Promise.allSettled([
+            client(`https://example.com/hook-failure/${hookName}`),
+          ])
+          await Promise.resolve()
+
+          expect(result).toHaveLength(1)
+          expect(calls).toHaveBeenCalled()
+          expect(client.pendingRequests).toHaveLength(0)
+        }
+      ),
+      { numRuns: 500 }
     )
   })
 })

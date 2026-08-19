@@ -200,7 +200,9 @@ export function createClient<
       ) => {
         const requestForAttempt = dispatchCtx.request
         let attempt = 0
-        const shouldRetryWithHook = (ctx: import('./types').RetryContext) => {
+        const shouldRetryWithHook = async (
+          ctx: import('./types').RetryContext
+        ) => {
           attempt = ctx.attempt
           dispatchCtx.metadata.retry.attempt = attempt
           dispatchCtx.metadata.retry.lastError = ctx.error
@@ -208,7 +210,7 @@ export function createClient<
           const retrying = effectiveShouldRetry(ctx)
           dispatchCtx.metadata.retry.shouldRetryResult = retrying
           if (retrying && attempt <= effectiveRetries) {
-            effectiveHooks.onRetry?.(
+            await effectiveHooks.onRetry?.(
               requestForAttempt,
               attempt - 1,
               ctx.error,
