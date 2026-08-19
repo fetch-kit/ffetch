@@ -53,6 +53,32 @@ describe('context-id plugin', () => {
     expect(new Set(seenIds).size).toBe(1)
   })
 
+  it('preserves a caller-provided id across retries without generating one', async () => {
+    const seenIds: string[] = []
+    const generate = vi.fn(() => 'generated-id')
+    let call = 0
+
+    global.fetch = vi.fn().mockImplementation(async (request: Request) => {
+      call++
+      seenIds.push(request.headers.get('x-context-id') ?? '')
+      return new Response(call < 3 ? 'fail' : 'ok', {
+        status: call < 3 ? 500 : 200,
+      })
+    })
+
+    const client = createClient({
+      retries: 2,
+      plugins: [contextIdPlugin({ generate })],
+    })
+
+    await client('https://example.com/retry', {
+      headers: { 'x-context-id': 'caller-id' },
+    })
+
+    expect(seenIds).toEqual(['caller-id', 'caller-id', 'caller-id'])
+    expect(generate).not.toHaveBeenCalled()
+  })
+
   it('uses the same id for all hedged attempts of one logical request', async () => {
     vi.useFakeTimers()
 
