@@ -224,21 +224,17 @@ export function createClient<
           let res = await retry(
             async () => {
               if (userSignal?.aborted) {
-                effectiveHooks.onAbort?.(requestForAttempt)
                 throw new AbortError('Request was aborted by user')
               }
               if (timeoutSignal?.aborted) {
-                effectiveHooks.onTimeout?.(requestForAttempt)
                 throw new TimeoutError('signal timed out')
               }
               if (typeof dispatchSignal?.throwIfAborted === 'function') {
                 dispatchSignal.throwIfAborted()
               } else if (dispatchSignal?.aborted) {
                 if (userSignal?.aborted) {
-                  effectiveHooks.onAbort?.(requestForAttempt)
                   throw new AbortError('Request was aborted by user')
                 } else if (timeoutSignal?.aborted) {
-                  effectiveHooks.onTimeout?.(requestForAttempt)
                   throw new TimeoutError('signal timed out')
                 } else {
                   throw new AbortError(
@@ -263,10 +259,8 @@ export function createClient<
                     timeoutSignal?.aborted &&
                     (!userSignal || !userSignal.aborted)
                   ) {
-                    effectiveHooks.onTimeout?.(requestForAttempt)
                     throw new TimeoutError('signal timed out', err)
                   } else if (userSignal?.aborted) {
-                    effectiveHooks.onAbort?.(requestForAttempt)
                     throw new AbortError('Request was aborted by user')
                   } else {
                     throw new AbortError(
@@ -311,6 +305,18 @@ export function createClient<
           return res
         } catch (err: unknown) {
           dispatchCtx.metadata.retry.lastError = err
+          if (err instanceof TimeoutError) {
+            await effectiveHooks.onTimeout?.(requestForAttempt)
+            await effectiveHooks.onError?.(requestForAttempt, err)
+            await effectiveHooks.onComplete?.(requestForAttempt, undefined, err)
+            throw err
+          }
+          if (err instanceof AbortError) {
+            await effectiveHooks.onAbort?.(requestForAttempt)
+            await effectiveHooks.onError?.(requestForAttempt, err)
+            await effectiveHooks.onComplete?.(requestForAttempt, undefined, err)
+            throw err
+          }
           if (lastResponse) {
             const resp = lastResponse as Response
             if (
@@ -328,18 +334,6 @@ export function createClient<
               )
             }
             return resp
-          }
-          if (err instanceof TimeoutError) {
-            await effectiveHooks.onTimeout?.(requestForAttempt)
-            await effectiveHooks.onError?.(requestForAttempt, err)
-            await effectiveHooks.onComplete?.(requestForAttempt, undefined, err)
-            throw err
-          }
-          if (err instanceof AbortError) {
-            await effectiveHooks.onAbort?.(requestForAttempt)
-            await effectiveHooks.onError?.(requestForAttempt, err)
-            await effectiveHooks.onComplete?.(requestForAttempt, undefined, err)
-            throw err
           }
           if (err instanceof NetworkError) {
             await effectiveHooks.onError?.(requestForAttempt, err)
