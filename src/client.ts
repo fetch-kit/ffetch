@@ -167,7 +167,7 @@ export function createClient<
 
       let timeoutSignal: AbortSignal | undefined = undefined
       let combinedSignal: AbortSignal | undefined = undefined
-      let controller: AbortController | undefined
+      const controller = new AbortController()
 
       if (effectiveTimeout > 0) {
         timeoutSignal = createTimeoutSignal(effectiveTimeout)
@@ -180,10 +180,10 @@ export function createClient<
         signals.push(transformedSignal)
       }
       if (timeoutSignal) signals.push(timeoutSignal)
+      signals.push(controller.signal)
 
       if (signals.length === 1) {
         combinedSignal = signals[0]
-        controller = new AbortController()
       } else {
         if (typeof AbortSignal.any !== 'function') {
           throw new Error(
@@ -191,7 +191,6 @@ export function createClient<
           )
         }
         combinedSignal = AbortSignal.any(signals)
-        controller = new AbortController()
       }
       pluginContext.metadata.signals.combined = combinedSignal
 
@@ -223,23 +222,26 @@ export function createClient<
         try {
           let res = await retry(
             async () => {
+              if (controller.signal.aborted) {
+                throw new AbortError('Request was aborted')
+              }
               if (userSignal?.aborted) {
                 throw new AbortError('Request was aborted by user')
               }
               if (timeoutSignal?.aborted) {
                 throw new TimeoutError('signal timed out')
               }
-              if (typeof dispatchSignal?.throwIfAborted === 'function') {
-                dispatchSignal.throwIfAborted()
-              } else if (dispatchSignal?.aborted) {
+              if (dispatchSignal?.aborted) {
                 if (userSignal?.aborted) {
                   throw new AbortError('Request was aborted by user')
                 } else if (timeoutSignal?.aborted) {
                   throw new TimeoutError('signal timed out')
+                } else if (controller.signal.aborted) {
+                  throw new AbortError('Request was aborted')
                 } else {
                   throw new AbortError(
                     'Request was aborted',
-                    new DOMException('Aborted', 'AbortError')
+                    dispatchSignal.reason
                   )
                 }
               }
@@ -262,6 +264,8 @@ export function createClient<
                     throw new TimeoutError('signal timed out', err)
                   } else if (userSignal?.aborted) {
                     throw new AbortError('Request was aborted by user')
+                  } else if (controller.signal.aborted) {
+                    throw new AbortError('Request was aborted', err)
                   } else {
                     throw new AbortError(
                       'Request was aborted',
