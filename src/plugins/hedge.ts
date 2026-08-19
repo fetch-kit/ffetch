@@ -38,7 +38,7 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
 
         const signal = AbortSignal.any([ctx.request.signal, controller.signal])
 
-        const req = new Request(ctx.request, { signal })
+        const req = new Request(ctx.request.clone(), { signal })
         attempts.push(next({ ...ctx, request: req }))
 
         if (attemptIndex > 0) {

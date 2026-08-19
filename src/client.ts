@@ -194,6 +194,27 @@ export function createClient<
       }
       pluginContext.metadata.signals.combined = combinedSignal
 
+      let coreErrorReported = false
+      const reportCoreError = async (error: unknown, hookRequest: Request) => {
+        if (coreErrorReported) return
+        if (
+          !(error instanceof TimeoutError) &&
+          !(error instanceof AbortError) &&
+          !(error instanceof NetworkError) &&
+          !(error instanceof RetryLimitError)
+        ) {
+          return
+        }
+
+        coreErrorReported = true
+        if (error instanceof TimeoutError) {
+          await effectiveHooks.onTimeout?.(hookRequest)
+        } else if (error instanceof AbortError) {
+          await effectiveHooks.onAbort?.(hookRequest)
+        }
+        await effectiveHooks.onError?.(hookRequest, error)
+      }
+
       const retryWithHooks = async (
         dispatchCtx: PluginRequestContext,
         dispatchSignal: AbortSignal | undefined
@@ -295,7 +316,6 @@ export function createClient<
             res = await effectiveHooks.transformResponse(res, requestForAttempt)
           }
           await effectiveHooks.after?.(requestForAttempt, res)
-          await effectiveHooks.onComplete?.(requestForAttempt, res, undefined)
           if (
             effectiveThrowOnHttpError &&
             ((res.status >= 400 && res.status < 500 && res.status !== 429) ||
@@ -312,15 +332,15 @@ export function createClient<
         } catch (err: unknown) {
           dispatchCtx.metadata.retry.lastError = err
           if (err instanceof TimeoutError) {
-            await effectiveHooks.onTimeout?.(requestForAttempt)
-            await effectiveHooks.onError?.(requestForAttempt, err)
-            await effectiveHooks.onComplete?.(requestForAttempt, undefined, err)
+            if (dispatchCtx === pluginContext) {
+              await reportCoreError(err, requestForAttempt)
+            }
             throw err
           }
           if (err instanceof AbortError) {
-            await effectiveHooks.onAbort?.(requestForAttempt)
-            await effectiveHooks.onError?.(requestForAttempt, err)
-            await effectiveHooks.onComplete?.(requestForAttempt, undefined, err)
+            if (dispatchCtx === pluginContext) {
+              await reportCoreError(err, requestForAttempt)
+            }
             throw err
           }
           if (lastResponse) {
@@ -342,8 +362,9 @@ export function createClient<
             return resp
           }
           if (err instanceof NetworkError) {
-            await effectiveHooks.onError?.(requestForAttempt, err)
-            await effectiveHooks.onComplete?.(requestForAttempt, undefined, err)
+            if (dispatchCtx === pluginContext) {
+              await reportCoreError(err, requestForAttempt)
+            }
             throw err
           }
           const retryErr = new RetryLimitError(
@@ -355,12 +376,9 @@ export function createClient<
               : 'Retry limit reached',
             err
           )
-          await effectiveHooks.onError?.(requestForAttempt, retryErr)
-          await effectiveHooks.onComplete?.(
-            requestForAttempt,
-            undefined,
-            retryErr
-          )
+          if (dispatchCtx === pluginContext) {
+            await reportCoreError(retryErr, requestForAttempt)
+          }
           throw retryErr
         }
       }
@@ -379,14 +397,27 @@ export function createClient<
         }
       }
 
+      let completeCalled = false
+      const callComplete = async (
+        response: Response | undefined,
+        error: unknown
+      ) => {
+        if (completeCalled) return
+        completeCalled = true
+        await effectiveHooks.onComplete?.(request, response, error)
+      }
+
       const actualPromise = dispatch(pluginContext)
         .then(async (response) => {
+          await callComplete(response, undefined)
           for (const plugin of plugins) {
             await plugin.onSuccess?.(pluginContext, response)
           }
           return response
         })
         .catch(async (err: unknown) => {
+          await reportCoreError(err, request)
+          await callComplete(undefined, err)
           for (const plugin of plugins) {
             await plugin.onError?.(pluginContext, err)
           }
