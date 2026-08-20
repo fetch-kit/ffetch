@@ -44,10 +44,10 @@ jobs:
         run: npm run test:ci
 
       - name: Create Version PR
-        uses: changesets/action@198f833dd7d863100ea6e28967bc9a9fdefadb0a # v1
+        uses: changesets/action@198f833dd7d863100ea6e28967bc9a9fdefadb0a # v2.1.0
         with:
-          version: npm run version
-          commit: 'chore(release): version packages'
-          title: 'chore(release): version packages'
+          version-script: npm run version
+          commit-message: 'chore(release): version packages'
+          pr-title: 'chore(release): version packages'
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
