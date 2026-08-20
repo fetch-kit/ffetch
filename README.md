@@ -12,7 +12,6 @@
 
 # @fetchkit/ffetch
 
-
 > Part of the **[fetch-kit ecosystem](https://fetchkit.org)** - production-ready fetch utilities and chaos-testing tools.
 
 **A production-ready TypeScript-first drop-in replacement for native fetch, or any fetch-compatible implementation.**
@@ -409,7 +408,7 @@ To report a security vulnerability, see [SECURITY.md](./SECURITY.md).
 ## Contributing
 
 - **Issues**: [GitHub Issues](https://github.com/fetch-kit/ffetch/issues)
-- **Pull Requests**: [GitHub PRs](https://github.com/fetch-kit/ffetch/pulls)
+- **Contribution guide**: See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and pull request requirements.
 - **Documentation**: Found in `./docs/` - PRs welcome!
 
 ## License
