@@ -103,7 +103,7 @@ export function dedupePlugin(options: DedupePluginOptions = {}): ClientPlugin {
           const waiter: Waiter = { resolve, reject, cleanup: () => {} }
           const onAbort = () => {
             const index = existing.waiters.indexOf(waiter)
-            if (index >= 0) existing.waiters.splice(index, 1)
+            existing.waiters.splice(index, 1)
             waiter.cleanup()
             reject(makeCancellationError(ctx))
           }

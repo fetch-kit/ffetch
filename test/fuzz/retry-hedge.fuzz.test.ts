@@ -2,7 +2,7 @@ import fc from 'fast-check'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createClient } from '../../src/client.js'
-import { AbortError } from '../../src/error.js'
+import { AbortError, TimeoutError } from '../../src/error.js'
 import { hedgePlugin } from '../../src/plugins/hedge.js'
 
 type ResponseOutcome = {
@@ -40,6 +40,81 @@ afterEach(() => {
 })
 
 describe('retry and hedge composition fuzzing', () => {
+  it('does not report an internal hedge transport error when another attempt succeeds', async () => {
+    vi.useFakeTimers()
+
+    let resolveInitial!: (response: Response) => void
+    let calls = 0
+    const onError = vi.fn()
+    const client = createClient({
+      timeout: 0,
+      retries: 0,
+      hooks: { onError },
+      plugins: [hedgePlugin({ delay: 1, maxHedges: 1 })],
+      fetchHandler: async () => {
+        const attempt = calls++
+        if (attempt === 0) {
+          return new Promise<Response>((resolve) => {
+            resolveInitial = resolve
+          })
+        }
+        throw new TypeError('failed to fetch')
+      },
+    })
+
+    const resultPromise = client('https://example.com/internal-network-error')
+    await vi.advanceTimersByTimeAsync(1)
+    resolveInitial(new Response('ok'))
+
+    await expect(resultPromise).resolves.toBeInstanceOf(Response)
+    expect(calls).toBe(2)
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('reports one logical timeout when all hedge attempts time out', async () => {
+    vi.useFakeTimers()
+
+    const originalTimeout = AbortSignal.timeout
+    const timeoutController = new AbortController()
+    AbortSignal.timeout = vi.fn(
+      () => timeoutController.signal
+    ) as typeof AbortSignal.timeout
+
+    try {
+      const onTimeout = vi.fn()
+      let calls = 0
+      const client = createClient({
+        timeout: 10,
+        retries: 0,
+        hooks: { onTimeout },
+        plugins: [hedgePlugin({ delay: 1, maxHedges: 1 })],
+        fetchHandler: async (input) => {
+          calls++
+          const signal = (input as Request).signal
+          return new Promise<Response>((_resolve, reject) => {
+            const abort = () =>
+              reject(new DOMException('Timed out', 'AbortError'))
+            if (signal.aborted) abort()
+            else signal.addEventListener('abort', abort, { once: true })
+          })
+        },
+      })
+
+      const resultPromise = client('https://example.com/hedge-timeout')
+      await vi.advanceTimersByTimeAsync(1)
+      expect(calls).toBe(2)
+
+      const assertion =
+        expect(resultPromise).rejects.toBeInstanceOf(TimeoutError)
+      timeoutController.abort(new DOMException('Timed out', 'TimeoutError'))
+      await vi.runAllTimersAsync()
+      await assertion
+      expect(onTimeout).toHaveBeenCalledOnce()
+    } finally {
+      AbortSignal.timeout = originalTimeout
+    }
+  })
+
   it('selects an available success without exceeding the product budget', async () => {
     await fc.assert(
       fc.asyncProperty(

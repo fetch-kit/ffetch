@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createClient } from '../../src/client.js'
 import { AbortError, BulkheadFullError } from '../../src/error.js'
+import type { PluginRequestContext } from '../../src/plugins.js'
 import { bulkheadPlugin } from '../../src/plugins/bulkhead.js'
 
 type BulkheadClientState = {
@@ -9,11 +10,59 @@ type BulkheadClientState = {
   queueDepth: number
 }
 
+function pluginContext(url: string, signal: AbortSignal): PluginRequestContext {
+  return {
+    request: new Request(url, { signal }),
+    init: { signal },
+    state: Object.create(null),
+    metadata: {
+      startedAt: Date.now(),
+      timeoutMs: 0,
+      signals: {},
+      retry: { configuredRetries: 0, configuredDelay: 0, attempt: 0 },
+    },
+  }
+}
+
 describe('bulkhead plugin', () => {
   it('exposes metadata defaults', () => {
     const plugin = bulkheadPlugin({ maxConcurrent: 2 })
     expect(plugin.name).toBe('bulkhead')
     expect(plugin.order).toBe(5)
+  })
+
+  it('falls back to the request signal in a standalone plugin pipeline', async () => {
+    let resolveActive!: (response: Response) => void
+    const next = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveActive = resolve
+        })
+    )
+    const plugin = bulkheadPlugin({ maxConcurrent: 1 })
+    const dispatch = plugin.wrapDispatch!(next)
+    const activeController = new AbortController()
+    const queuedController = new AbortController()
+
+    const active = dispatch(
+      pluginContext(
+        'https://example.com/standalone-active',
+        activeController.signal
+      )
+    )
+    await vi.waitFor(() => expect(next).toHaveBeenCalledOnce())
+
+    const queued = dispatch(
+      pluginContext(
+        'https://example.com/standalone-queued',
+        queuedController.signal
+      )
+    )
+    queuedController.abort(new Error('cancel standalone queue entry'))
+
+    await expect(queued).rejects.toBeInstanceOf(AbortError)
+    resolveActive(new Response('ok'))
+    await expect(active).resolves.toBeInstanceOf(Response)
   })
 
   it('queues requests beyond maxConcurrent and drains in FIFO order', async () => {

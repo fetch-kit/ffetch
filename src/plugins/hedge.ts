@@ -36,7 +36,8 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
         const controller = new AbortController()
         controllers.push(controller)
 
-        const signal = AbortSignal.any([ctx.request.signal, controller.signal])
+        const parentSignal = ctx.metadata.signals.combined ?? ctx.request.signal
+        const signal = AbortSignal.any([parentSignal, controller.signal])
 
         const req = new Request(ctx.request.clone(), { signal })
         attempts.push(next({ ...ctx, request: req }))

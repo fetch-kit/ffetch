@@ -259,8 +259,6 @@ export function createClient<
                   throw new AbortError('Request was aborted by user')
                 } else if (timeoutSignal?.aborted) {
                   throw new TimeoutError('signal timed out')
-                } else if (controller.signal.aborted) {
-                  throw new AbortError('Request was aborted')
                 } else {
                   throw new AbortError(
                     'Request was aborted',

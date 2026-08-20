@@ -43,6 +43,23 @@ afterEach(() => {
 })
 
 describe('retry policy fuzzing', () => {
+  it('uses the default retry decision when no callback is supplied', async () => {
+    let calls = 0
+    const response = await retry(
+      async () => {
+        calls++
+        return new Response(null, { status: 200 })
+      },
+      1,
+      0,
+      undefined,
+      new Request('https://example.com/default-retry-decision')
+    )
+
+    expect(response.status).toBe(200)
+    expect(calls).toBe(2)
+  })
+
   it('obeys the attempt budget and stops at the first terminal response', async () => {
     await fc.assert(
       fc.asyncProperty(

@@ -9,6 +9,7 @@ Fixed
 - Core: asynchronous `onRetry` hooks are awaited and their failures propagate correctly
 - Hedge plugin: retryable responses no longer beat a pending successful attempt
 - Hedge plugin: request bodies are safely cloned across retry and hedge attempts
+- Hedge plugin: overall timeouts and `abortAll()` now cancel every in-flight hedge attempt
 - Hedge plugin: lifecycle hooks run once per logical request instead of once per speculative attempt
 - Hedge plugin: cancellation and errors from internal losing attempts no longer leak through public lifecycle hooks
 - Bulkhead plugin: requests that abort or time out while queued are removed and reject with the correct error type

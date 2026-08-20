@@ -3,11 +3,8 @@ name: OpenSSF Scorecard
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   schedule:
     - cron: '0 8 * * 1'
-  workflow_dispatch:
 
 permissions: read-all
 

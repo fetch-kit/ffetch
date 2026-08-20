@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 import { createClient } from '../../src/client.js'
-import { HttpError } from '../../src/error.js'
+import { AbortError, HttpError, TimeoutError } from '../../src/error.js'
+import type {
+  PluginRequestContext,
+  PluginSignalMetadata,
+} from '../../src/plugins.js'
 import { dedupePlugin } from '../../src/plugins/dedupe.js'
 
 function createDeferred<T>() {
@@ -14,11 +18,85 @@ function createDeferred<T>() {
   return { promise, resolve, reject }
 }
 
+function pluginContext(
+  url: string,
+  signal: AbortSignal,
+  signals: PluginSignalMetadata = {}
+): PluginRequestContext {
+  return {
+    request: new Request(url, { signal }),
+    init: { signal },
+    state: Object.create(null),
+    metadata: {
+      startedAt: Date.now(),
+      timeoutMs: 0,
+      signals,
+      retry: { configuredRetries: 0, configuredDelay: 0, attempt: 0 },
+    },
+  }
+}
+
 afterEach(() => {
   vi.useRealTimers()
 })
 
 describe('dedupe plugin parity', () => {
+  it('rejects an already-aborted waiter in a standalone plugin pipeline', async () => {
+    const deferred = createDeferred<Response>()
+    const plugin = dedupePlugin()
+    const dispatch = plugin.wrapDispatch!(() => deferred.promise)
+    const activeController = new AbortController()
+    const waiterController = new AbortController()
+    const active = dispatch(
+      pluginContext(
+        'https://example.com/standalone-abort',
+        activeController.signal
+      )
+    )
+
+    waiterController.abort(new Error('already aborted'))
+    const waiter = dispatch(
+      pluginContext(
+        'https://example.com/standalone-abort',
+        waiterController.signal
+      )
+    )
+
+    await expect(waiter).rejects.toBeInstanceOf(AbortError)
+    deferred.resolve(new Response('ok'))
+    await expect(active).resolves.toBeInstanceOf(Response)
+  })
+
+  it('classifies an already-timed-out deduped waiter correctly', async () => {
+    const deferred = createDeferred<Response>()
+    const plugin = dedupePlugin()
+    const dispatch = plugin.wrapDispatch!(() => deferred.promise)
+    const activeController = new AbortController()
+    const timeoutController = new AbortController()
+    const active = dispatch(
+      pluginContext(
+        'https://example.com/standalone-timeout',
+        activeController.signal
+      )
+    )
+
+    timeoutController.abort(new DOMException('Timed out', 'TimeoutError'))
+    const waiter = dispatch(
+      pluginContext(
+        'https://example.com/standalone-timeout',
+        timeoutController.signal,
+        {
+          timeout: timeoutController.signal,
+          combined: timeoutController.signal,
+        }
+      )
+    )
+
+    await expect(waiter).rejects.toBeInstanceOf(TimeoutError)
+    deferred.resolve(new Response('ok'))
+    await expect(active).resolves.toBeInstanceOf(Response)
+  })
+
   it('dedupes concurrent requests with the same key', async () => {
     let calls = 0
     global.fetch = vi.fn().mockImplementation(async () => {
@@ -179,7 +257,9 @@ describe('dedupe plugin parity', () => {
     const p1 = client('https://example.com/body')
     const p2 = client('https://example.com/body')
 
-    deferred.resolve(new Response(JSON.stringify({ value: 42 }), { status: 200 }))
+    deferred.resolve(
+      new Response(JSON.stringify({ value: 42 }), { status: 200 })
+    )
 
     const [r1, r2] = await Promise.all([p1, p2])
     const [d1, d2] = await Promise.all([r1.json(), r2.json()])
@@ -199,7 +279,9 @@ describe('dedupe plugin parity', () => {
     const p2 = client('https://example.com/body3')
     const p3 = client('https://example.com/body3')
 
-    deferred.resolve(new Response(JSON.stringify({ value: 99 }), { status: 200 }))
+    deferred.resolve(
+      new Response(JSON.stringify({ value: 99 }), { status: 200 })
+    )
 
     const [r1, r2, r3] = await Promise.all([p1, p2, p3])
     const [d1, d2, d3] = await Promise.all([r1.json(), r2.json(), r3.json()])

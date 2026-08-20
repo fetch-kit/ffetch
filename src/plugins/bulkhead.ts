@@ -46,11 +46,6 @@ export function bulkheadPlugin(
       const next = queue.shift()!
       next.cleanup()
 
-      if (next.signal.aborted) {
-        next.reject(makeCancellationError(next.ctx))
-        continue
-      }
-
       activeCount++
       next.resolve()
     }
