@@ -46,8 +46,7 @@ jobs:
       - name: Create Version PR
         uses: changesets/action@198f833dd7d863100ea6e28967bc9a9fdefadb0a # v2.1.0
         with:
+          github-token: ${{ steps.app-token.outputs.token }}
           version-script: npm run version
           commit-message: 'chore(release): version packages'
           pr-title: 'chore(release): version packages'
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
