@@ -12,7 +12,6 @@
 
 # @fetchkit/ffetch
 
-
 > Part of the **[fetch-kit ecosystem](https://fetchkit.org)** - production-ready fetch utilities and chaos-testing tools.
 
 **A production-ready TypeScript-first drop-in replacement for native fetch, or any fetch-compatible implementation.**
@@ -392,7 +391,7 @@ Got questions, want to discuss features, or share examples? Join the **Fetch-Kit
 
 ## Security
 
-`ffetch` is scored at **7.4/10** by the [OpenSSF Scorecard](https://securityscorecards.dev/), an automated security health check for open source projects. This score reflects the commitment to security best practices and continuous improvement. Key security features include:
+`ffetch` is continuously evaluated by the [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/fetch-kit/ffetch), an automated security health check for open source projects. The badge at the top of this README shows the latest score. Security measures include:
 
 - ✅ Pinned GitHub Actions dependencies
 - ✅ CodeQL static analysis on every PR and push to main
@@ -402,14 +401,14 @@ Got questions, want to discuss features, or share examples? Join the **Fetch-Kit
 - ✅ Branch protection on `main`
 - ✅ SPDX SBOM attached to every release
 
-The score is capped below 10 due to being a solo-maintained project (no mandatory code review or multiple org contributors). [View the full breakdown](https://scorecard.dev/viewer/?uri=github.com/fetch-kit/ffetch).
+Some checks, such as mandatory reviews and multiple organizational contributors, are intentionally not pursued for this solo-maintained project. [View the full breakdown](https://scorecard.dev/viewer/?uri=github.com/fetch-kit/ffetch).
 
 To report a security vulnerability, see [SECURITY.md](./SECURITY.md).
 
 ## Contributing
 
 - **Issues**: [GitHub Issues](https://github.com/fetch-kit/ffetch/issues)
-- **Pull Requests**: [GitHub PRs](https://github.com/fetch-kit/ffetch/pulls)
+- **Contribution guide**: See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and pull request requirements.
 - **Documentation**: Found in `./docs/` - PRs welcome!
 
 ## License
