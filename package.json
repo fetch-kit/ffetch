@@ -90,7 +90,7 @@
   "devDependencies": {
     "@changesets/cli": "^3.0.0",
     "@eslint/js": "^10.0.1",
-    "@types/node": "^25.9.1",
+    "@types/node": "^26.2.0",
     "@typescript-eslint/eslint-plugin": "^8.39.0",
     "@typescript-eslint/parser": "^8.39.0",
     "@vitest/coverage-v8": "^4.1.8",
@@ -101,7 +101,7 @@
     "lint-staged": "^17.0.5",
     "prettier": "^3.6.2",
     "tsup": "^8.5.0",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.8"
   },
   "overrides": {
