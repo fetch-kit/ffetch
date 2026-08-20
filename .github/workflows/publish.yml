@@ -67,8 +67,36 @@ jobs:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Pack release artifact
+        id: pack
+        run: |
+          TARBALL=$(npm pack --json | jq -r '.[0].filename')
+          if [ -z "$TARBALL" ] || [ ! -f "$TARBALL" ]; then
+            echo "Failed to create release tarball" >&2
+            exit 1
+          fi
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: Generate build provenance
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.pack.outputs.tarball }}
+
+      - name: Prepare provenance release asset
+        id: provenance
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+          GH_TOKEN: ${{ github.token }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          PROVENANCE="${TARBALL}.intoto.jsonl"
+          jq -c . "$BUNDLE_PATH" > "$PROVENANCE"
+          gh attestation verify "$TARBALL" --repo "$GITHUB_REPOSITORY" --bundle "$PROVENANCE"
+          echo "file=$PROVENANCE" >> "$GITHUB_OUTPUT"
+
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish "${{ steps.pack.outputs.tarball }}" --provenance --access public
 
       - name: Get package info
         id: package
@@ -98,11 +126,14 @@ jobs:
           upload-release-assets: false
           upload-artifact: false
 
-      - name: Upload SBOM to release
+      - name: Upload release assets
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           tag_name: v${{ steps.package.outputs.version }}
-          files: sbom.spdx.json
+          files: |
+            ${{ steps.pack.outputs.tarball }}
+            ${{ steps.provenance.outputs.file }}
+            sbom.spdx.json
 
       - name: Announce release to Discord
         run: |
