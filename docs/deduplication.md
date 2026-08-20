@@ -55,6 +55,13 @@ const client = createClient({
 - TTL eviction only removes in-flight dedupe keys from the map.
 - TTL eviction does not reject already in-flight request promises.
 - Stream/FormData request bodies are skipped by the default hash strategy.
+- A body supplied through an input `Request` is exposed as a stream, so the
+  default strategy safely skips deduplication unless a custom `hashFn` provides
+  an application-specific identity.
+- An additional deduplicated caller that aborts stops waiting without
+  cancelling the shared physical request or the other callers.
+- The first caller owns the shared physical request. Aborting that caller
+  aborts the underlying operation and rejects its remaining waiters.
 
 ## Response Body Consumption
 

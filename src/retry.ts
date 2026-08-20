@@ -44,7 +44,7 @@ export async function retry(
   fn: () => Promise<Response>,
   retries: number,
   delay: RetryDelay,
-  shouldRetry: (ctx: RetryContext) => boolean = () => true,
+  shouldRetry: (ctx: RetryContext) => boolean | Promise<boolean> = () => true,
   request: Request,
   signal?: AbortSignal
 ): Promise<Response> {
@@ -60,21 +60,23 @@ export async function retry(
     }
     try {
       lastRes = await fn()
-      ctx.response = lastRes
-      ctx.error = undefined
-      if (i < retries && shouldRetry(ctx)) {
-        const wait = typeof delay === 'function' ? delay(ctx) : delay
-        await waitForRetryDelay(wait, signal)
-        continue
-      }
-      return lastRes
     } catch (err) {
       lastErr = err
       ctx.error = err
-      if (i === retries || !shouldRetry(ctx)) throw err
+      if (i === retries || !(await shouldRetry(ctx))) throw err
       const wait = typeof delay === 'function' ? delay(ctx) : delay
       await waitForRetryDelay(wait, signal)
+      continue
     }
+
+    ctx.response = lastRes
+    ctx.error = undefined
+    if (i < retries && (await shouldRetry(ctx))) {
+      const wait = typeof delay === 'function' ? delay(ctx) : delay
+      await waitForRetryDelay(wait, signal)
+      continue
+    }
+    return lastRes
   }
   throw lastErr
 }

@@ -167,7 +167,7 @@ export function createClient<
 
       let timeoutSignal: AbortSignal | undefined = undefined
       let combinedSignal: AbortSignal | undefined = undefined
-      let controller: AbortController | undefined
+      const controller = new AbortController()
 
       if (effectiveTimeout > 0) {
         timeoutSignal = createTimeoutSignal(effectiveTimeout)
@@ -180,10 +180,10 @@ export function createClient<
         signals.push(transformedSignal)
       }
       if (timeoutSignal) signals.push(timeoutSignal)
+      signals.push(controller.signal)
 
       if (signals.length === 1) {
         combinedSignal = signals[0]
-        controller = new AbortController()
       } else {
         if (typeof AbortSignal.any !== 'function') {
           throw new Error(
@@ -191,9 +191,29 @@ export function createClient<
           )
         }
         combinedSignal = AbortSignal.any(signals)
-        controller = new AbortController()
       }
       pluginContext.metadata.signals.combined = combinedSignal
+
+      let coreErrorReported = false
+      const reportCoreError = async (error: unknown, hookRequest: Request) => {
+        if (coreErrorReported) return
+        if (
+          !(error instanceof TimeoutError) &&
+          !(error instanceof AbortError) &&
+          !(error instanceof NetworkError) &&
+          !(error instanceof RetryLimitError)
+        ) {
+          return
+        }
+
+        coreErrorReported = true
+        if (error instanceof TimeoutError) {
+          await effectiveHooks.onTimeout?.(hookRequest)
+        } else if (error instanceof AbortError) {
+          await effectiveHooks.onAbort?.(hookRequest)
+        }
+        await effectiveHooks.onError?.(hookRequest, error)
+      }
 
       const retryWithHooks = async (
         dispatchCtx: PluginRequestContext,
@@ -201,7 +221,9 @@ export function createClient<
       ) => {
         const requestForAttempt = dispatchCtx.request
         let attempt = 0
-        const shouldRetryWithHook = (ctx: import('./types').RetryContext) => {
+        const shouldRetryWithHook = async (
+          ctx: import('./types').RetryContext
+        ) => {
           attempt = ctx.attempt
           dispatchCtx.metadata.retry.attempt = attempt
           dispatchCtx.metadata.retry.lastError = ctx.error
@@ -209,7 +231,7 @@ export function createClient<
           const retrying = effectiveShouldRetry(ctx)
           dispatchCtx.metadata.retry.shouldRetryResult = retrying
           if (retrying && attempt <= effectiveRetries) {
-            effectiveHooks.onRetry?.(
+            await effectiveHooks.onRetry?.(
               requestForAttempt,
               attempt - 1,
               ctx.error,
@@ -223,27 +245,24 @@ export function createClient<
         try {
           let res = await retry(
             async () => {
+              if (controller.signal.aborted) {
+                throw new AbortError('Request was aborted')
+              }
               if (userSignal?.aborted) {
-                effectiveHooks.onAbort?.(requestForAttempt)
                 throw new AbortError('Request was aborted by user')
               }
               if (timeoutSignal?.aborted) {
-                effectiveHooks.onTimeout?.(requestForAttempt)
                 throw new TimeoutError('signal timed out')
               }
-              if (typeof dispatchSignal?.throwIfAborted === 'function') {
-                dispatchSignal.throwIfAborted()
-              } else if (dispatchSignal?.aborted) {
+              if (dispatchSignal?.aborted) {
                 if (userSignal?.aborted) {
-                  effectiveHooks.onAbort?.(requestForAttempt)
                   throw new AbortError('Request was aborted by user')
                 } else if (timeoutSignal?.aborted) {
-                  effectiveHooks.onTimeout?.(requestForAttempt)
                   throw new TimeoutError('signal timed out')
                 } else {
                   throw new AbortError(
                     'Request was aborted',
-                    new DOMException('Aborted', 'AbortError')
+                    dispatchSignal.reason
                   )
                 }
               }
@@ -263,11 +282,11 @@ export function createClient<
                     timeoutSignal?.aborted &&
                     (!userSignal || !userSignal.aborted)
                   ) {
-                    effectiveHooks.onTimeout?.(requestForAttempt)
                     throw new TimeoutError('signal timed out', err)
                   } else if (userSignal?.aborted) {
-                    effectiveHooks.onAbort?.(requestForAttempt)
                     throw new AbortError('Request was aborted by user')
+                  } else if (controller.signal.aborted) {
+                    throw new AbortError('Request was aborted', err)
                   } else {
                     throw new AbortError(
                       'Request was aborted',
@@ -295,7 +314,6 @@ export function createClient<
             res = await effectiveHooks.transformResponse(res, requestForAttempt)
           }
           await effectiveHooks.after?.(requestForAttempt, res)
-          await effectiveHooks.onComplete?.(requestForAttempt, res, undefined)
           if (
             effectiveThrowOnHttpError &&
             ((res.status >= 400 && res.status < 500 && res.status !== 429) ||
@@ -311,6 +329,18 @@ export function createClient<
           return res
         } catch (err: unknown) {
           dispatchCtx.metadata.retry.lastError = err
+          if (err instanceof TimeoutError) {
+            if (dispatchCtx === pluginContext) {
+              await reportCoreError(err, requestForAttempt)
+            }
+            throw err
+          }
+          if (err instanceof AbortError) {
+            if (dispatchCtx === pluginContext) {
+              await reportCoreError(err, requestForAttempt)
+            }
+            throw err
+          }
           if (lastResponse) {
             const resp = lastResponse as Response
             if (
@@ -329,21 +359,10 @@ export function createClient<
             }
             return resp
           }
-          if (err instanceof TimeoutError) {
-            await effectiveHooks.onTimeout?.(requestForAttempt)
-            await effectiveHooks.onError?.(requestForAttempt, err)
-            await effectiveHooks.onComplete?.(requestForAttempt, undefined, err)
-            throw err
-          }
-          if (err instanceof AbortError) {
-            await effectiveHooks.onAbort?.(requestForAttempt)
-            await effectiveHooks.onError?.(requestForAttempt, err)
-            await effectiveHooks.onComplete?.(requestForAttempt, undefined, err)
-            throw err
-          }
           if (err instanceof NetworkError) {
-            await effectiveHooks.onError?.(requestForAttempt, err)
-            await effectiveHooks.onComplete?.(requestForAttempt, undefined, err)
+            if (dispatchCtx === pluginContext) {
+              await reportCoreError(err, requestForAttempt)
+            }
             throw err
           }
           const retryErr = new RetryLimitError(
@@ -355,12 +374,9 @@ export function createClient<
               : 'Retry limit reached',
             err
           )
-          await effectiveHooks.onError?.(requestForAttempt, retryErr)
-          await effectiveHooks.onComplete?.(
-            requestForAttempt,
-            undefined,
-            retryErr
-          )
+          if (dispatchCtx === pluginContext) {
+            await reportCoreError(retryErr, requestForAttempt)
+          }
           throw retryErr
         }
       }
@@ -379,14 +395,27 @@ export function createClient<
         }
       }
 
+      let completeCalled = false
+      const callComplete = async (
+        response: Response | undefined,
+        error: unknown
+      ) => {
+        if (completeCalled) return
+        completeCalled = true
+        await effectiveHooks.onComplete?.(request, response, error)
+      }
+
       const actualPromise = dispatch(pluginContext)
         .then(async (response) => {
+          await callComplete(response, undefined)
           for (const plugin of plugins) {
             await plugin.onSuccess?.(pluginContext, response)
           }
           return response
         })
         .catch(async (err: unknown) => {
+          await reportCoreError(err, request)
+          await callComplete(undefined, err)
           for (const plugin of plugins) {
             await plugin.onError?.(pluginContext, err)
           }

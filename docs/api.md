@@ -246,9 +246,9 @@ await response.arrayBuffer() // drain the stream
 
 The `onProgress` callback receives:
 
-- `progress.percent` — fraction from `0` to `1`. Always `0` when `Content-Length` is absent.
+- `progress.percent` — fraction from `0` to `1`. Always `0` when `Content-Length` is absent or invalid.
 - `progress.transferredBytes` — cumulative bytes received so far.
-- `progress.totalBytes` — value of `Content-Length` header, or `0` if absent.
+- `progress.totalBytes` — value of a valid `Content-Length` header, or `0` if absent or invalid.
 - `chunk` — the raw `Uint8Array` chunk just received.
 
 Notes:

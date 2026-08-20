@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createClient } from '../../src/index.js'
+import { AbortError, createClient } from '../../src/index.js'
 
 describe('Pending Requests', () => {
   beforeEach(() => {
@@ -247,6 +247,28 @@ describe('Pending Requests', () => {
 })
 
 describe('pendingRequests and abortAll', () => {
+  it('does not start another retry when abortAll runs from onRetry', async () => {
+    let calls = 0
+    let client!: ReturnType<typeof createClient>
+    client = createClient({
+      retries: 1,
+      retryDelay: 0,
+      hooks: {
+        onRetry: () => client.abortAll(),
+      },
+      fetchHandler: async () => {
+        calls++
+        return new Response(null, { status: 503 })
+      },
+    })
+
+    await expect(
+      client('https://example.com/abort-before-retry')
+    ).rejects.toBeInstanceOf(AbortError)
+    expect(calls).toBe(1)
+    expect(client.pendingRequests).toHaveLength(0)
+  })
+
   it('exposes controller and abortAll aborts all requests', async () => {
     global.fetch = vi.fn().mockImplementation(async (input) => {
       const signal = input instanceof Request ? input.signal : undefined

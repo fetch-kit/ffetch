@@ -81,6 +81,33 @@ describe('downloadProgressPlugin', () => {
     )
   })
 
+  it('treats unsafe Content-Length values as an unknown total', async () => {
+    const onProgress = vi.fn()
+    const unsafeLength = String(Number.MAX_SAFE_INTEGER + 1)
+
+    const client = createClient({
+      plugins: [downloadProgressPlugin(onProgress)],
+      fetchHandler: async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array([1]))
+              controller.close()
+            },
+          }),
+          { headers: { 'content-length': unsafeLength } }
+        ),
+    })
+
+    const response = await client('https://example.com/unsafe-length')
+    await response.arrayBuffer()
+
+    expect(onProgress).toHaveBeenCalledWith(
+      { percent: 0, transferredBytes: 1, totalBytes: 0 },
+      new Uint8Array([1])
+    )
+  })
+
   it('passes through the response body so it is still readable', async () => {
     const data = new Uint8Array([10, 20, 30])
 

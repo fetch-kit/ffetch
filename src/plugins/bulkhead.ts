@@ -1,5 +1,5 @@
-import type { ClientPlugin } from '../plugins.js'
-import { AbortError, BulkheadFullError } from '../error.js'
+import type { ClientPlugin, PluginRequestContext } from '../plugins.js'
+import { AbortError, BulkheadFullError, TimeoutError } from '../error.js'
 
 export type BulkheadPluginExtension = {
   activeCount: number
@@ -14,7 +14,8 @@ export type BulkheadPluginOptions = {
 }
 
 type QueueEntry = {
-  request: Request
+  ctx: PluginRequestContext
+  signal: AbortSignal
   resolve: () => void
   reject: (err: unknown) => void
   cleanup: () => void
@@ -28,7 +29,15 @@ export function bulkheadPlugin(
   let activeCount = 0
   const queue: QueueEntry[] = []
 
-  function makeAbortError(signal: AbortSignal): AbortError {
+  function makeCancellationError(ctx: PluginRequestContext): Error {
+    const { signals } = ctx.metadata
+    if (signals.user?.aborted) {
+      return new AbortError('Request was aborted by user', signals.user.reason)
+    }
+    if (signals.timeout?.aborted) {
+      return new TimeoutError('signal timed out', signals.timeout.reason)
+    }
+    const signal = signals.combined ?? ctx.request.signal
     return new AbortError('Request was aborted', signal.reason)
   }
 
@@ -36,11 +45,6 @@ export function bulkheadPlugin(
     while (activeCount < maxConcurrent && queue.length > 0) {
       const next = queue.shift()!
       next.cleanup()
-
-      if (next.request.signal.aborted) {
-        next.reject(makeAbortError(next.request.signal))
-        continue
-      }
 
       activeCount++
       next.resolve()
@@ -52,7 +56,9 @@ export function bulkheadPlugin(
     drainQueue()
   }
 
-  async function acquire(request: Request): Promise<void> {
+  async function acquire(ctx: PluginRequestContext): Promise<void> {
+    const { request } = ctx
+    const signal = ctx.metadata.signals.combined ?? request.signal
     if (activeCount < maxConcurrent) {
       activeCount++
       return
@@ -69,7 +75,8 @@ export function bulkheadPlugin(
 
     await new Promise<void>((resolve, reject) => {
       const entry: QueueEntry = {
-        request,
+        ctx,
+        signal,
         resolve,
         reject,
         cleanup: () => {},
@@ -81,19 +88,19 @@ export function bulkheadPlugin(
           queue.splice(idx, 1)
         }
         entry.cleanup()
-        reject(makeAbortError(request.signal))
+        reject(makeCancellationError(ctx))
       }
 
       entry.cleanup = () => {
-        request.signal.removeEventListener('abort', onAbort)
+        signal.removeEventListener('abort', onAbort)
       }
 
-      if (request.signal.aborted) {
-        reject(makeAbortError(request.signal))
+      if (signal.aborted) {
+        reject(makeCancellationError(ctx))
         return
       }
 
-      request.signal.addEventListener('abort', onAbort, { once: true })
+      signal.addEventListener('abort', onAbort, { once: true })
       queue.push(entry)
     })
   }
@@ -114,7 +121,7 @@ export function bulkheadPlugin(
     wrapDispatch: (next) => async (ctx) => {
       let acquired = false
       try {
-        await acquire(ctx.request)
+        await acquire(ctx)
         acquired = true
         return await next(ctx)
       } finally {
