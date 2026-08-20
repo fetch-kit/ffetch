@@ -44,7 +44,7 @@ jobs:
         run: npm run test:ci
 
       - name: Create Version PR
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1
+        uses: changesets/action@198f833dd7d863100ea6e28967bc9a9fdefadb0a # v1
         with:
           version: npm run version
           commit: 'chore(release): version packages'
