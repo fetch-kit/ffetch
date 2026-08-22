@@ -5,6 +5,7 @@
 ![Build](https://github.com/fetch-kit/ffetch/actions/workflows/ci.yml/badge.svg)
 ![codecov](https://codecov.io/gh/fetch-kit/ffetch/branch/main/graph/badge.svg)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/fetch-kit/ffetch/badge)](https://scorecard.dev/viewer/?uri=github.com/fetch-kit/ffetch)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14166/badge)](https://www.bestpractices.dev/projects/14166)
 
 ![MIT](https://img.shields.io/npm/l/@fetchkit/ffetch)
 ![bundlephobia](https://badgen.net/bundlephobia/minzip/@fetchkit/ffetch)
