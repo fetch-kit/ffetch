@@ -2,6 +2,8 @@
 
 Contributions are welcome. Use [GitHub Issues](https://github.com/fetch-kit/ffetch/issues) to report bugs or propose enhancements. Security vulnerabilities should be reported privately as described in [SECURITY.md](./SECURITY.md).
 
+Please follow [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) in all project spaces.
+
 ## Development
 
 Development uses Node.js 24, matching the CI environment. Fork the repository, create a branch from `main`, and install the dependencies:
