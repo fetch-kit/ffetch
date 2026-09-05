@@ -17,6 +17,9 @@
   "homepage": "https://github.com/fetch-kit/ffetch#readme",
   "bugs": "https://github.com/fetch-kit/ffetch/issues",
   "author": "Gabor Koos <gabor@gaborkoos.com>",
+  "engines": {
+    "node": ">=20.6.0"
+  },
   "license": "MIT",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

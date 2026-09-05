@@ -410,6 +410,7 @@ To report a security vulnerability, see [SECURITY.md](./SECURITY.md).
 
 - **Issues**: [GitHub Issues](https://github.com/fetch-kit/ffetch/issues)
 - **Contribution guide**: See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and pull request requirements.
+- **Code of Conduct**: See [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
 - **Documentation**: Found in `./docs/` - PRs welcome!
 
 ## License
