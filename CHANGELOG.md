@@ -1,5 +1,17 @@
 # ffetch
 
+## 5.6.2
+
+### Patch Changes
+
+- 946a8d6: Changed
+
+  - added a Node.js engine requirement to prevent unsupported installs
+
+  Added
+
+  - `CODE_OF_CONDUCT.md` and linked it from the contribution docs
+
 ## 5.6.1
 
 ### Patch Changes
