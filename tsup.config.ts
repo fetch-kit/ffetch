@@ -14,6 +14,11 @@ export default defineConfig([
       'src/plugins/context-id.ts',
     ],
     format: ['esm', 'cjs'],
+    // Keep one copy of shared modules (e.g. src/error.ts) across every
+    // entrypoint so error classes keep a single identity and `instanceof`
+    // holds between the root export and the plugin subpaths. esbuild code
+    // splitting is ESM-only, so without this CJS inlines a duplicate.
+    splitting: true,
     dts: true,
     minify: false,
     sourcemap: true,

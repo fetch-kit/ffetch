@@ -23,6 +23,8 @@ import { responseShortcutsPlugin } from '@fetchkit/ffetch/plugins/response-short
 import { downloadProgressPlugin } from '@fetchkit/ffetch/plugins/download-progress'
 ```
 
+The error classes are shared between the root entrypoint and the plugin subpaths: an error thrown by a plugin still satisfies `instanceof` against the class imported from `@fetchkit/ffetch`. For example, a `CircuitOpenError` thrown by `circuitPlugin` passes `err instanceof CircuitOpenError` for the root export, in both the ESM and CommonJS builds.
+
 Custom plugin authoring is documented in [plugins.md](./plugins.md).
 
 ## createClient(options?)
