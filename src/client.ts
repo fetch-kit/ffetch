@@ -238,6 +238,12 @@ export function createClient<
               ctx.response
             )
           }
+          if (retrying) {
+            const body = ctx.response?.body
+            if (body) {
+              void body.cancel().catch(() => {})
+            }
+          }
           return retrying
         }
 
