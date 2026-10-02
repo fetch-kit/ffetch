@@ -361,6 +361,66 @@ describe('retry', () => {
     expect(res.status).toBe(500)
     expect(calls).toBe(3)
   })
+
+  it('does not buffer a streamed body passed as a Request', async () => {
+    // Regression: waiting for an upload to end before sending it stalls an
+    // open-ended body, so a body sent as a `Request` is never copied.
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('chunk'))
+        // Never closed: the upload ends when the server acknowledges it.
+      },
+    })
+    let calls = 0
+    global.fetch = vi.fn().mockImplementation(async () => {
+      calls++
+      return new Response('ok', { status: 200 })
+    })
+
+    const f = createClient({ retries: 2 })
+    const res = await f(
+      new Request('https://example.com/upload', {
+        method: 'POST',
+        body: stream,
+        duplex: 'half',
+      } as RequestInit)
+    )
+
+    expect(res.status).toBe(200)
+    expect(calls).toBe(1)
+  })
+
+  it('does not buffer a body replaced by a transformRequest hook', async () => {
+    // The hook may hand back a stream, so the request it returns is copied on
+    // the retry instead of before the first attempt.
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('chunk'))
+      },
+    })
+    let calls = 0
+    global.fetch = vi.fn().mockImplementation(async () => {
+      calls++
+      return new Response('ok', { status: 200 })
+    })
+
+    const f = createClient({
+      retries: 2,
+      hooks: {
+        transformRequest: (request) =>
+          new Request(request, {
+            method: 'POST',
+            body: stream,
+            duplex: 'half',
+          } as RequestInit),
+      },
+    })
+
+    const res = await f('https://example.com/upload')
+
+    expect(res.status).toBe(200)
+    expect(calls).toBe(1)
+  })
 })
 
 describe('retry with shouldRetry', () => {
@@ -461,7 +521,11 @@ describe('Retry-After header', () => {
         get: (name: string) => (name === 'Retry-After' ? '2' : undefined),
       },
     })
-    const ctx = { attempt: 1, request: new Request('https://example.com'), response }
+    const ctx = {
+      attempt: 1,
+      request: new Request('https://example.com'),
+      response,
+    }
     const delay =
       typeof defaultDelay === 'function' ? defaultDelay(ctx) : defaultDelay
     expect(delay).toBe(2000)
@@ -480,7 +544,11 @@ describe('Retry-After header', () => {
           get: (name: string) => (name === 'Retry-After' ? date : undefined),
         },
       })
-      const ctx = { attempt: 1, request: new Request('https://example.com'), response }
+      const ctx = {
+        attempt: 1,
+        request: new Request('https://example.com'),
+        response,
+      }
       const delay =
         typeof defaultDelay === 'function' ? defaultDelay(ctx) : defaultDelay
       expect(delay).toBe(5000)

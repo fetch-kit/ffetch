@@ -5,6 +5,7 @@ import {
   TimeoutError,
   AbortError,
   NetworkError,
+  RetryLimitError,
 } from '../../src/error.js'
 import { circuitPlugin } from '../../src/plugins/circuit.js'
 
@@ -47,6 +48,24 @@ describe('Hooks', () => {
     await f('https://example.com')
     expect(onRetry).toHaveBeenCalled()
     expect(onRetry.mock.calls.length).toBe(2)
+  })
+
+  it('does not send a body a hook has already consumed', async () => {
+    const fetchHandler = vi.fn(async () => new Response('ok'))
+    // Reading the body in `before` leaves nothing that could be sent, so the
+    // request has to fail the way it did before retries replayed the body:
+    // through the dispatch error handling, and without sending anything.
+    const before = vi.fn(async (request: Request) => {
+      await request.text()
+    })
+    const f = createClient({ retries: 1, fetchHandler, hooks: { before } })
+
+    await expect(
+      f('https://example.com/api', { method: 'POST', body: 'payload' })
+    ).rejects.toThrow(RetryLimitError)
+
+    expect(before).toHaveBeenCalled()
+    expect(fetchHandler).not.toHaveBeenCalled()
   })
 
   it('calls onTimeout hook on timeout', async () => {
