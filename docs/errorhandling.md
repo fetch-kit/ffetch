@@ -23,6 +23,10 @@ See also:
 | Aborted by user                    |         throws         |         throws          | Throws AbortError                   |
 | Retry limit reached (other errors) |         throws         |         throws          | Throws RetryLimitError              |
 
+## Error Identity Across Entrypoints
+
+The error classes are shared between the root entrypoint and the plugin subpaths, so they keep a single identity across the package. An error thrown by a plugin imported from `@fetchkit/ffetch/plugins/*` therefore satisfies `instanceof` against the class imported from `@fetchkit/ffetch` - for example, a `CircuitOpenError` thrown by `circuitPlugin` passes `err instanceof CircuitOpenError` for the root export. This holds for both the ESM and CommonJS builds.
+
 ## Detailed Behavior
 
 ### 1. HTTP Errors (all 4xx and 5xx)
