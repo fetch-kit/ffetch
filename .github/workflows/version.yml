@@ -40,6 +40,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # `test/package` asserts against the built `dist/` output, so the build
+      # has to run before the tests. `ci.yml` and `publish.yml` do the same.
+      - name: Build
+        run: npm run build
+
       - name: Test
         run: npm run test:ci
 
