@@ -93,6 +93,10 @@ export type ClientPlugin<
   order?: number
   setup?: (ctx: PluginSetupContext<TExtension>) => void
   preRequest?: (ctx: PluginRequestContext) => void | Promise<void>
+  beforeAttempt?: (
+    ctx: PluginRequestContext,
+    attempt: number
+  ) => void | Promise<void>
   wrapDispatch?: (next: PluginDispatch) => PluginDispatch
   decoratePromise?: (
     promise: Promise<Response>

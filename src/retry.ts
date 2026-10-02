@@ -41,7 +41,7 @@ function waitForRetryDelay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 export async function retry(
-  fn: () => Promise<Response>,
+  fn: (attempt: number) => Promise<Response>,
   retries: number,
   delay: RetryDelay,
   shouldRetry: (ctx: RetryContext) => boolean | Promise<boolean> = () => true,
@@ -59,7 +59,7 @@ export async function retry(
       error: lastErr,
     }
     try {
-      lastRes = await fn()
+      lastRes = await fn(i + 1)
     } catch (err) {
       lastErr = err
       ctx.error = err
