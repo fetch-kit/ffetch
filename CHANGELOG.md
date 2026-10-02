@@ -1,5 +1,11 @@
 # ffetch
 
+## 5.7.0
+
+### Minor Changes
+
+- 008e852: Add a `beforeAttempt` plugin lifecycle hook that runs before each physical fetch attempt (initial, retry, and hedged), and extend `contextIdPlugin` to emit a W3C `traceparent` header by default while preserving incoming trace context.
+
 ## 5.6.2
 
 ### Patch Changes
