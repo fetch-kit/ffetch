@@ -75,16 +75,14 @@ describe('dedupeRequestHash', () => {
     expect(dedupeRequestHash(params)).toMatch(/^PATCH\|https:\/\/example.com\|/)
   })
 
-  it('hashes POST with Blob body', () => {
+  it('skips Blob body (returns undefined)', () => {
     const blob = new Blob(['hello'], { type: 'text/plain' })
     const params: DedupeHashParams = {
       method: 'POST',
       url: 'https://example.com',
       body: blob,
     }
-    expect(dedupeRequestHash(params)).toBe(
-      `POST|https://example.com|[blob:text/plain:${blob.size}]`
-    )
+    expect(dedupeRequestHash(params)).toBeUndefined()
   })
 
   it('hashes DELETE with null body', () => {

@@ -54,7 +54,8 @@ const client = createClient({
 - The dedupe key is computed from the original request init/body before dispatch; if `transformRequest` changes request identity, use a custom `hashFn` that reflects the final semantics you need.
 - TTL eviction only removes in-flight dedupe keys from the map.
 - TTL eviction does not reject already in-flight request promises.
-- Stream/FormData request bodies are skipped by the default hash strategy.
+- Stream/FormData/Blob request bodies are skipped by the default hash strategy
+  because their contents cannot be hashed synchronously and reliably.
 - A body supplied through an input `Request` is exposed as a stream, so the
   default strategy safely skips deduplication unless a custom `hashFn` provides
   an application-specific identity.

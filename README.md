@@ -347,9 +347,9 @@ npm install abort-controller-x
 ## Deduplication Limitations
 
 - Deduplication is **off** by default. Enable it via `plugins: [dedupePlugin()]`.
-- The default hash function is `dedupeRequestHash`, which handles common body types and skips deduplication for streams and FormData.
+- The default hash function is `dedupeRequestHash`, which handles common body types and skips deduplication for streams, FormData, and Blobs.
 - Optional stale-entry cleanup: `dedupePlugin({ ttl, sweepInterval })` enables map-entry eviction. TTL eviction only removes dedupe keys; it does not reject already in-flight promises.
-- **Stream bodies** (`ReadableStream`, `FormData`): Deduplication is skipped for requests with these body types, as they cannot be reliably hashed or replayed.
+- **Stream/FormData/Blob bodies** (`ReadableStream`, `FormData`, `Blob`): Deduplication is skipped for requests with these body types, as they cannot be reliably hashed or replayed.
 - **Non-idempotent requests**: Use deduplication with caution for non-idempotent methods (e.g., POST), as it may suppress multiple intended requests.
 - **Custom hash function**: Ensure your hash function uniquely identifies requests to avoid accidental deduplication.
 

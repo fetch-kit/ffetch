@@ -53,6 +53,11 @@ export function dedupeRequestHash(
   if (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) {
     return undefined
   }
+  // Skip deduplication for Blob: contents can't be hashed synchronously and
+  // type/size alone would collapse distinct payloads.
+  if (body instanceof Blob) {
+    return undefined
+  }
   if (typeof body === 'string') {
     bodyString = body
   } else if (body instanceof URLSearchParams) {
@@ -61,8 +66,6 @@ export function dedupeRequestHash(
     bodyString = toBase64(new Uint8Array(body))
   } else if (body instanceof Uint8Array) {
     bodyString = toBase64(body)
-  } else if (body instanceof Blob) {
-    bodyString = `[blob:${body.type}:${body.size}]`
   } else if (body == null) {
     bodyString = ''
   } else {
