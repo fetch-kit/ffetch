@@ -331,4 +331,48 @@ describe('plugin pipeline', () => {
     await pending
     expect(events).toEqual(['decorate', 'wrap.before', 'wrap.after'])
   })
+
+  it('runs beforeAttempt once per physical attempt in sorted order', async () => {
+    const events: string[] = []
+    let call = 0
+
+    const pluginA: ClientPlugin = {
+      name: 'a',
+      order: 20,
+      beforeAttempt: (_ctx, attempt) => {
+        events.push(`a.attempt.${attempt}`)
+      },
+    }
+
+    const pluginB: ClientPlugin = {
+      name: 'b',
+      order: 10,
+      beforeAttempt: (_ctx, attempt) => {
+        events.push(`b.attempt.${attempt}`)
+      },
+    }
+
+    const client = createClient({
+      retries: 2,
+      plugins: [pluginA, pluginB],
+      fetchHandler: async () => {
+        call++
+        if (call < 3) {
+          return new Response('fail', { status: 500 })
+        }
+        return new Response('ok', { status: 200 })
+      },
+    })
+
+    await client('https://example.com/before-attempt')
+
+    expect(events).toEqual([
+      'b.attempt.1',
+      'a.attempt.1',
+      'b.attempt.2',
+      'a.attempt.2',
+      'b.attempt.3',
+      'a.attempt.3',
+    ])
+  })
 })

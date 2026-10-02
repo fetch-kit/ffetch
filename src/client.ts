@@ -238,13 +238,19 @@ export function createClient<
               ctx.response
             )
           }
+          if (retrying) {
+            const body = ctx.response?.body
+            if (body) {
+              void body.cancel().catch(() => {})
+            }
+          }
           return retrying
         }
 
         let lastResponse: Response | undefined = undefined
         try {
           let res = await retry(
-            async () => {
+            async (attempt) => {
               if (controller.signal.aborted) {
                 throw new AbortError('Request was aborted')
               }
@@ -265,6 +271,9 @@ export function createClient<
                     dispatchSignal.reason
                   )
                 }
+              }
+              for (const plugin of plugins) {
+                await plugin.beforeAttempt?.(dispatchCtx, attempt)
               }
               const reqWithSignal = new Request(requestForAttempt.clone(), {
                 signal: dispatchSignal,
