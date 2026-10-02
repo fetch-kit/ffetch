@@ -140,13 +140,13 @@ export function contextIdPlugin(
     name: 'context-id',
     order,
     preRequest: (ctx) => {
-      const id = resolveContextId(ctx, generate)
-      inject(id, ctx.request)
+      resolveContextId(ctx, generate)
       if (traceparentEnabled) {
         resolveTrace(ctx)
       }
     },
     beforeAttempt: (ctx) => {
+      inject(resolveContextId(ctx, generate), ctx.request)
       if (!traceparentEnabled) return
       const trace = resolveTrace(ctx)
       const spanId = generateSpanId()
@@ -154,11 +154,6 @@ export function contextIdPlugin(
         'traceparent',
         `00-${trace.traceId}-${spanId}-${trace.flags}`
       )
-    },
-    wrapDispatch: (next) => async (ctx) => {
-      const id = resolveContextId(ctx, generate)
-      inject(id, ctx.request)
-      return next(ctx)
     },
   }
 }
