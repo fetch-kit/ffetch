@@ -16,11 +16,10 @@ Before submitting a pull request, run the same checks used by CI:
 
 ```sh
 npm run lint
-npm run build
 npm run test:ci
 ```
 
-`npm run build` must run before `npm run test:ci`, because the checks in `test/package` assert against the built `dist/` output rather than the sources.
+`npm run test:ci` builds `dist/` first, because the checks in `test/package` assert against the built output rather than the sources.
 
 You can use `npm test` while developing to run the tests in watch mode.
 

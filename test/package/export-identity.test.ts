@@ -13,7 +13,8 @@ import type { PluginRequestContext } from '../../src/plugins.js'
 
 // These assertions run against the built package rather than `src`, because
 // the identity of the error classes only diverges once each entrypoint is
-// bundled on its own. `npm run build` must run first.
+// bundled on its own. `npm run test:ci` builds `dist/` before running the
+// suite; `npm run build` has to run first when invoking Vitest directly.
 const require = createRequire(import.meta.url)
 
 function builtUrl(relativePath: string): string {
@@ -96,7 +97,7 @@ function fillBulkhead(bulkhead: BulkheadPluginModule): Promise<unknown> {
 beforeAll(() => {
   if (!existsSync(fileURLToPath(builtUrl('../../dist/index.cjs')))) {
     throw new Error(
-      'Packaged output missing. Run `npm run build` before `npm run test:ci`.'
+      'Packaged output missing. Run `npm run build` first, or run the suite through `npm run test:ci`, which builds it.'
     )
   }
 })
