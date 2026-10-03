@@ -308,4 +308,134 @@ describe('Retry sequence', () => {
     expect(calls).toBe(1)
     expect(Date.now() - started).toBeLessThan(1_000)
   })
+  it('reports a rejection with its own error and not the response before it', async () => {
+    const released = vi.fn()
+    const failure = new Error('fail 2')
+    let calls = 0
+    global.fetch = vi.fn().mockImplementation(async () => {
+      calls++
+      if (calls === 1) {
+        return new Response(
+          new ReadableStream({
+            cancel: () => {
+              released()
+            },
+          }),
+          { status: 503 }
+        )
+      }
+      if (calls === 2) throw failure
+      return new Response('ok')
+    })
+    const decisions: unknown[] = []
+    const retries: unknown[] = []
+    const f = createClient({
+      retries: 2,
+      retryDelay: 0,
+      shouldRetry: (ctx) => {
+        decisions.push({
+          attempt: ctx.attempt,
+          error: ctx.error,
+          status: ctx.response?.status,
+        })
+        return true
+      },
+      hooks: {
+        onRetry: (_request, attempt, error, response) => {
+          retries.push({ attempt, error, status: response?.status })
+        },
+      },
+    })
+
+    const response = await f('https://example.com/own-outcome')
+
+    expect(response.status).toBe(200)
+    expect(calls).toBe(3)
+    // The attempt that failed after a response is only reported with its own
+    // error: the policy and the hook are not told about a response that is no
+    // longer the answer, and a body that was already released once is not
+    // released again for it.
+    expect(decisions).toEqual([
+      { attempt: 1, error: undefined, status: 503 },
+      { attempt: 2, error: failure, status: undefined },
+    ])
+    expect(retries).toEqual([
+      { attempt: 0, error: undefined, status: 503 },
+      { attempt: 1, error: failure, status: undefined },
+    ])
+    expect(released).toHaveBeenCalledTimes(1)
+  })
+
+  it('records the attempt a request ends on, not the one before it', async () => {
+    let calls = 0
+    global.fetch = vi.fn().mockImplementation(async () => {
+      calls++
+      return new Response(null, { status: calls === 1 ? 503 : 200 })
+    })
+    const settled: unknown[] = []
+    const f = createClient({
+      retries: 1,
+      retryDelay: 0,
+      plugins: [
+        {
+          name: 'settled-metadata',
+          onSuccess: (ctx) => {
+            settled.push({ ...ctx.metadata.retry })
+          },
+          onFinally: (ctx) => {
+            settled.push({ ...ctx.metadata.retry })
+          },
+        },
+      ],
+    })
+
+    const response = await f('https://example.com/settled-metadata')
+
+    expect(response.status).toBe(200)
+    expect(calls).toBe(2)
+    // The attempt that uses up the budget is never offered for a retry, so it is
+    // recorded without a decision - and recorded all the same.
+    const recorded = {
+      configuredRetries: 1,
+      configuredDelay: 0,
+      attempt: 2,
+      lastError: undefined,
+      lastResponse: response,
+      shouldRetryResult: undefined,
+    }
+    expect(settled).toEqual([recorded, recorded])
+  })
+
+  it('records the attempt a request with no retry budget ran', async () => {
+    const failure = new Error('fail 1')
+    global.fetch = vi.fn().mockRejectedValue(failure)
+    const seen: unknown[] = []
+    const f = createClient({
+      retries: 0,
+      retryDelay: 0,
+      plugins: [
+        {
+          name: 'no-budget-metadata',
+          onError: (ctx) => {
+            seen.push({ ...ctx.metadata.retry })
+          },
+        },
+      ],
+    })
+
+    await expect(
+      f('https://example.com/no-budget-metadata')
+    ).rejects.toBeInstanceOf(RetryLimitError)
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    expect(seen).toEqual([
+      {
+        configuredRetries: 0,
+        configuredDelay: 0,
+        attempt: 1,
+        lastError: failure,
+        shouldRetryResult: undefined,
+      },
+    ])
+  })
 })

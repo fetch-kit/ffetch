@@ -21,7 +21,11 @@ export interface RetrySequence {
    * describe, and the request the attempts are numbered against.
    */
   request: Request
-  /** The retry metadata the sequence keeps up to date, as plugins read it. */
+  /**
+   * The retry metadata the sequence keeps up to date, as plugins read it. Every
+   * attempt is recorded, the last one the budget allows included, so what
+   * plugins read while the request settles describes the attempt that ran.
+   */
   metadata: PluginRetryMetadata
   /**
    * Whether the attempt that just finished is re-sent. When left out, every
@@ -114,17 +118,30 @@ export async function runRetrySequence(
   } = sequence
 
   /**
-   * Asks whether the attempt that just finished is re-sent, and puts the answer
-   * where plugins read it - the attempt that ran, the error it failed with or the
-   * response it produced, and what the decision said about it.
+   * Records the attempt that just finished where plugins read it. Every attempt
+   * is recorded, the last one the budget allows included: that attempt decides
+   * how the request ends, so a plugin that reads the metadata while it settles
+   * has to see it.
+   *
+   * `shouldRetryResult` starts out unset because this attempt has not been
+   * offered for a retry yet - the answer belongs to the attempt it was asked
+   * about, not to the one after it.
+   */
+  const record = (ctx: RetryContext) => {
+    metadata.attempt = ctx.attempt
+    metadata.lastError = ctx.error
+    metadata.lastResponse = ctx.response
+    metadata.shouldRetryResult = undefined
+  }
+
+  /**
+   * Asks whether the attempt that just finished is re-sent, and records the
+   * answer in the metadata plugins read.
    *
    * Deciding is local code's job, so an error raised here is local code's, even
    * when the decision or the hook throws the attempt's own error onward.
    */
-  const retry = async (ctx: RetryContext): Promise<boolean> => {
-    metadata.attempt = ctx.attempt
-    metadata.lastError = ctx.error
-    metadata.lastResponse = ctx.response
+  const offerRetry = async (ctx: RetryContext): Promise<boolean> => {
     const retrying = await local(() => decide(ctx))
     metadata.shouldRetryResult = retrying
     if (retrying) {
@@ -143,28 +160,29 @@ export async function runRetrySequence(
   let lastRes: Response | undefined
 
   for (let i = 0; i <= retries; i++) {
-    const ctx: RetryContext = {
-      attempt: i + 1,
-      request,
-      response: lastRes,
-      error: lastErr,
-    }
+    // An attempt either fails or produces a response, so the context is only
+    // ever given that attempt's own outcome: a response an earlier attempt left
+    // behind is not passed on as if it were this attempt's, or a policy that
+    // reads the response would decide on a response that is no longer the
+    // answer.
+    const ctx: RetryContext = { attempt: i + 1, request }
 
     try {
       lastRes = await attempt(i + 1)
     } catch (err) {
       lastErr = err
       ctx.error = err
+      record(ctx)
       // The last attempt the budget allows is never offered for a retry.
-      if (i === retries || !(await retry(ctx))) throw err
+      if (i === retries || !(await offerRetry(ctx))) throw err
       const wait = typeof delay === 'function' ? delay(ctx) : delay
       await waitForRetryDelay(wait, signal)
       continue
     }
 
     ctx.response = lastRes
-    ctx.error = undefined
-    if (i < retries && (await retry(ctx))) {
+    record(ctx)
+    if (i < retries && (await offerRetry(ctx))) {
       const wait = typeof delay === 'function' ? delay(ctx) : delay
       await waitForRetryDelay(wait, signal)
       continue

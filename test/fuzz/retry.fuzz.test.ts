@@ -303,4 +303,62 @@ describe('retry policy fuzzing', () => {
       { numRuns: 1_000 }
     )
   })
+  it('reports one outcome per attempt and records the attempt a run ends on', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(retryOutcomeArbitrary, { minLength: 1, maxLength: 8 }),
+        fc.integer({ min: 0, max: 6 }),
+        async (outcomes, retries) => {
+          let calls = 0
+          const offered: { error?: unknown; response?: Response }[] = []
+          const metadata = retryMetadata(retries, 0)
+
+          let result: Response | undefined
+          try {
+            result = await runRetrySequence({
+              attempt: async () => {
+                const outcome = outcomes[Math.min(calls, outcomes.length - 1)]
+                calls++
+                if (outcome.kind === 'error') {
+                  throw new TypeError(outcome.message)
+                }
+                return new Response(null, { status: outcome.status })
+              },
+              retries,
+              delay: 0,
+              decide: (ctx) => {
+                offered.push({ error: ctx.error, response: ctx.response })
+                return shouldRetry(ctx)
+              },
+              request: new Request('https://example.com/retry-report'),
+              metadata,
+            })
+          } catch {
+            // A run that ends in a failure is an outcome here, not the subject.
+          }
+
+          // A decision is asked about one attempt, and an attempt either fails or
+          // produces a response - never both, and never one an earlier attempt
+          // left behind.
+          for (const ctx of offered) {
+            expect(ctx.error === undefined).toBe(ctx.response !== undefined)
+          }
+
+          // The attempt the run ends on is the attempt the metadata describes.
+          expect(metadata.attempt).toBe(calls)
+          expect(metadata.lastResponse).toBe(result)
+          if (result === undefined) {
+            expect(metadata.lastError).toBeInstanceOf(TypeError)
+          }
+
+          // The attempt that uses up the budget is never offered for a retry, so
+          // no answer about it is left in the metadata.
+          if (calls === retries + 1) {
+            expect(metadata.shouldRetryResult).toBeUndefined()
+          }
+        }
+      ),
+      { numRuns: 500 }
+    )
+  })
 })

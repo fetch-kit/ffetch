@@ -44,7 +44,7 @@ A step that throws does not skip the callbacks that have already started: once a
 What `beforeAttempt` sees is one attempt of a retry sequence the core runs:
 
 - Attempts are numbered from 1, and `beforeAttempt(ctx, attempt)` is given the number of the attempt about to be dispatched - the initial attempt is `1`, the first retry is `2`, and a hedge is a separate dispatch with its own numbering.
-- `ctx.metadata.retry` describes the attempt that finished most recently: `attempt`, `lastError`, `lastResponse`, `shouldRetryResult`, and the `configuredRetries`/`configuredDelay` the request was configured with.
+- `ctx.metadata.retry` describes the attempt that finished most recently: `attempt`, its `lastError` or the `lastResponse` it produced (an attempt does the one or the other), and what the retry decision answered about it as `shouldRetryResult` - which is unset for the last attempt a request's budget allows, because that one is never offered for a retry. The attempt a request ends on is recorded as well, so `onSuccess`/`onError`/`onFinally` read the attempt that actually ran. `configuredRetries` and `configuredDelay` are what the request was configured with.
 - A plugin that dispatches the request again through `next(ctx)` runs its own sequence, so a retried or hedged dispatch keeps its own attempt numbers.
 
 ### What Each Hook Is For
