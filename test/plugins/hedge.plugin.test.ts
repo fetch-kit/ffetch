@@ -658,6 +658,101 @@ describe('hedgePlugin onHedge', () => {
   })
 })
 
+describe('hedgePlugin onHedge errors', () => {
+  it('rejects the request when onHedge returns a rejected promise', async () => {
+    vi.useFakeTimers()
+
+    const signals: AbortSignal[] = []
+    const d1 = defer<Response>()
+    const d2 = defer<Response>()
+    const onHedge = vi.fn(async () => {
+      throw new Error('hedge callback failed')
+    })
+    let calls = 0
+
+    const next: PluginDispatch = async (ctx) => {
+      calls++
+      signals.push(ctx.request.signal)
+      return calls === 1 ? d1.promise : d2.promise
+    }
+
+    const dispatch = hedgePlugin({ delay: 50, maxHedges: 1, onHedge })
+      .wrapDispatch!(next)
+    const resultP = dispatch(makeCtx())
+    const rejection = expect(resultP).rejects.toThrow('hedge callback failed')
+
+    await vi.advanceTimersByTimeAsync(60)
+    await rejection
+
+    // The failure aborts every in-flight attempt instead of escaping.
+    expect(signals[0].aborted).toBe(true)
+    expect(signals[1].aborted).toBe(true)
+
+    d1.resolve(new Response('slow'))
+    d2.resolve(new Response('hedge'))
+    await resultP.catch(() => {})
+  })
+
+  it('rejects the request when onHedge throws synchronously', async () => {
+    vi.useFakeTimers()
+
+    const d1 = defer<Response>()
+    const d2 = defer<Response>()
+    const onHedge = vi.fn(() => {
+      throw new Error('sync hedge failure')
+    })
+    let calls = 0
+
+    const next: PluginDispatch = async () => {
+      calls++
+      return calls === 1 ? d1.promise : d2.promise
+    }
+
+    const dispatch = hedgePlugin({ delay: 50, maxHedges: 1, onHedge })
+      .wrapDispatch!(next)
+    const resultP = dispatch(makeCtx())
+    // Before the fix this never settled: the throw skipped the attempt watcher.
+    const rejection = expect(resultP).rejects.toThrow('sync hedge failure')
+
+    await vi.advanceTimersByTimeAsync(60)
+    await rejection
+
+    d1.resolve(new Response('slow'))
+    d2.resolve(new Response('hedge'))
+    await resultP.catch(() => {})
+  })
+
+  it('ignores an onHedge rejection that arrives after the race settled', async () => {
+    vi.useFakeTimers()
+
+    const callback = defer<void>()
+    const d1 = defer<Response>()
+    const onHedge = vi.fn(() => callback.promise)
+    let calls = 0
+
+    const next: PluginDispatch = async () => {
+      calls++
+      return calls === 1 ? d1.promise : new Response('hedge wins')
+    }
+
+    const dispatch = hedgePlugin({ delay: 50, maxHedges: 1, onHedge })
+      .wrapDispatch!(next)
+    const resultP = dispatch(makeCtx())
+
+    await vi.advanceTimersByTimeAsync(60)
+    const response = await resultP
+    expect(response.status).toBe(200)
+    expect(onHedge).toHaveBeenCalledOnce()
+
+    // The response is already handed to the caller, so a late failure is
+    // dropped instead of becoming an unhandled rejection.
+    callback.reject(new Error('late hedge failure'))
+    await vi.advanceTimersByTimeAsync(0)
+
+    d1.resolve(new Response('slow'))
+  })
+})
+
 describe('hedgePlugin signal propagation', () => {
   it('propagates external abort to all inflight attempts', async () => {
     vi.useFakeTimers()
