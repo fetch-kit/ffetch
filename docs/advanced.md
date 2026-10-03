@@ -115,9 +115,11 @@ setInterval(() => {
   - `promise` - The Promise<Response> for the request
   - `request` - The Request object with URL, headers, method, etc.
   - `controller` - The AbortController for the request (use `.abort()` to cancel)
-  - Requests are automatically added when they start - preparation included, so `abortAll()` can cancel one that has not been dispatched yet - and removed when they complete (success or failure), even when a plugin hook throws
+  - Requests are automatically added when they start - preparation included, so `abortAll()` settles one that has not been dispatched yet, even while a preparation hook is still running - and removed when they complete (success or failure), even when a plugin hook throws
   - Each client instance maintains its own separate `pendingRequests` array
   - You can abort all requests at once using `client.abortAll()`
+
+`abortAll()` and the request's own `signal` also settle a request whose preparation hook has not returned yet. `timeout` still bounds the dispatch, not the hooks, so a preparation hook that never settles is released by cancellation.
 
 ## Retry Strategies and Backoff
 

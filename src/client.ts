@@ -300,16 +300,57 @@ export function createClient<
         await effectiveHooks.onError?.(hookRequest, error)
       }
 
-      // Preparation and dispatch share one boundary. A hook that fails before
-      // the request is dispatched used to reject past the whole pipeline, which
-      // skipped core `onComplete` and plugin `onError`/`onFinally` - the
+      // Cancellation settles a request that is still being prepared: a
+      // preparation hook that never resolves would otherwise hold its promise
+      // and its `pendingRequests` entry forever, because the signal the
+      // dispatch path reads (`combinedSignal`) is not built until preparation
+      // has finished.
+      let cancelPreparation: ((error: AbortError) => void) | undefined
+      const watchedSignals: AbortSignal[] = []
+      const cancellation = new Promise<never>((_resolve, reject) => {
+        cancelPreparation = reject
+      })
+
+      const cancellationError = () =>
+        init.signal?.aborted
+          ? new AbortError('Request was aborted by user')
+          : new AbortError('Request was aborted', request.signal.reason)
+
+      const onCancellation = () => {
+        cancelPreparation?.(cancellationError())
+      }
+
+      const stopWatching = () => {
+        for (const signal of watchedSignals) {
+          signal.removeEventListener('abort', onCancellation)
+        }
+        watchedSignals.length = 0
+        cancelPreparation = undefined
+      }
+
+      const watchSignal = (signal?: AbortSignal | null) => {
+        if (!signal || watchedSignals.includes(signal)) return
+        watchedSignals.push(signal)
+        if (signal.aborted) onCancellation()
+        else signal.addEventListener('abort', onCancellation)
+      }
+
+      // Preparation and dispatch share one lifecycle boundary. A hook that fails
+      // before the request is dispatched used to reject past the whole pipeline,
+      // which skipped core `onComplete` and plugin `onError`/`onFinally` - the
       // lifecycle callbacks a caller relies on to release what it allocated.
-      const prepared = (async (): Promise<Response> => {
+      const preparation = (async () => {
+        watchSignal(init.signal)
+        watchSignal(request.signal)
+        watchSignal(controller.signal)
+
         if (effectiveHooks.transformRequest) {
           request = await effectiveHooks.transformRequest(request)
           // The entry is registered before this resolves, so the request a
           // monitor reads stays the one that is being prepared.
           pendingEntry!.request = request
+          // A replacement request can carry a signal of its own.
+          watchSignal(request.signal)
         }
         await effectiveHooks.before?.(request)
 
@@ -339,7 +380,7 @@ export function createClient<
         const userSignal = init.signal
         const transformedSignal = request.signal
 
-        pluginContext = {
+        const requestContext: PluginRequestContext = {
           request,
           init,
           state: Object.create(null),
@@ -360,6 +401,7 @@ export function createClient<
             },
           },
         }
+        pluginContext = requestContext
 
         for (const plugin of plugins) {
           await plugin.preRequest?.(pluginContext)
@@ -394,24 +436,22 @@ export function createClient<
           pluginContext.metadata.signals.timeout = timeoutSignal
         }
 
-        const signals: AbortSignal[] = []
-        if (userSignal) signals.push(userSignal)
-        if (transformedSignal && transformedSignal !== userSignal) {
-          signals.push(transformedSignal)
-        }
-        if (timeoutSignal) signals.push(timeoutSignal)
-        signals.push(controller.signal)
+        // The pipeline's own controller always joins the caller's and the
+        // timeout signals, so there is always more than one signal to combine.
+        // `AbortSignal.any` drops duplicates, so a repeated signal is harmless.
+        const signals = [
+          userSignal,
+          transformedSignal,
+          timeoutSignal,
+          controller.signal,
+        ].filter((signal): signal is AbortSignal => signal != null)
 
-        if (signals.length === 1) {
-          combinedSignal = signals[0]
-        } else {
-          if (typeof AbortSignal.any !== 'function') {
-            throw new Error(
-              'AbortSignal.any is required for combining multiple signals. Please install a polyfill for environments that do not support it.'
-            )
-          }
-          combinedSignal = AbortSignal.any(signals)
+        if (typeof AbortSignal.any !== 'function') {
+          throw new Error(
+            'AbortSignal.any is required for combining multiple signals. Please install a polyfill for environments that do not support it.'
+          )
         }
+        combinedSignal = AbortSignal.any(signals)
         pluginContext.metadata.signals.combined = combinedSignal
 
         const retryWithHooks = async (
@@ -612,14 +652,22 @@ export function createClient<
           }
         }
 
-        return dispatch(pluginContext)
+        // Bound to the context it was built for. Running it is what reaches the
+        // network, so a preparation that was cancelled never runs it.
+        return () => dispatch(requestContext)
       })()
+
+      // Dispatch runs only once preparation settled, and a cancelled
+      // preparation settles here instead of waiting for the hook that is stuck.
+      const prepared = Promise.race([preparation, cancellation])
+        .then((dispatch) => dispatch())
+        .finally(stopWatching)
         .then(async (response) => {
           await callComplete(response, undefined)
-          if (pluginContext) {
-            for (const plugin of plugins) {
-              await plugin.onSuccess?.(pluginContext, response)
-            }
+          // A response can only come out of the pipeline, so the context that
+          // describes the request is set by the time this runs.
+          for (const plugin of plugins) {
+            await plugin.onSuccess?.(pluginContext!, response)
           }
           return response
         })

@@ -60,6 +60,40 @@ describe('core client fuzzing', () => {
       { numRuns: 250 }
     )
   })
+  it('settles and cleans up a preparation that is cancelled', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom('abortAll', 'signal'),
+        async (cancellation) => {
+          const controller = new AbortController()
+          let fetches = 0
+          const client = createClient({
+            plugins: [
+              // Never settles: only cancellation can end this request.
+              { name: 'stuck', preRequest: () => new Promise<void>(() => {}) },
+            ],
+            fetchHandler: async () => {
+              fetches++
+              return new Response(null)
+            },
+          })
+
+          const request = client('https://example.com/stuck-prep', {
+            signal: cancellation === 'signal' ? controller.signal : undefined,
+          })
+          if (cancellation === 'abortAll') client.abortAll()
+          else controller.abort()
+
+          await expect(request).rejects.toBeInstanceOf(AbortError)
+          // A cancelled preparation neither reaches the network nor leaves its
+          // entry behind.
+          expect(fetches).toBe(0)
+          expect(client.pendingRequests).toHaveLength(0)
+        }
+      ),
+      { numRuns: 25 }
+    )
+  })
 
   it('clones request bodies intact across every retry attempt', async () => {
     await fc.assert(

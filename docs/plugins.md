@@ -23,7 +23,7 @@ Plugins run in a deterministic pipeline with two phases:
 - `wrapDispatch`: wraps request execution (`before` / `after` around `next(ctx)`).
 - `decoratePromise`: runs when the request promise is created, before it is returned to the caller.
 - `onSuccess` / `onError`: runs when the request settles.
-- `onFinally`: always runs after success or error, for every plugin, even when preparation or another hook fails.
+- `onFinally`: always runs after success or error - for every plugin once the request has entered the plugin pipeline, even when another hook fails.
 
 ### Per-request Timeline
 
@@ -37,7 +37,7 @@ For one request, the flow is:
 6. Later, when it settles, run `onSuccess` **or** `onError`.
 7. Run `onFinally`.
 
-A step that throws does not skip the callbacks that have already started: `onError` and `onFinally` reach every plugin, and core `onComplete` reports the failure even when it happens during preparation, before the request reaches the network.
+A step that throws does not skip the callbacks that have already started: once a request has entered the plugin pipeline, `onError` and `onFinally` reach every plugin. Core `onComplete` reports the failure even when it happens earlier - a `transformRequest` or `before` hook that throws while the request is still being prepared, before the pipeline starts, reaches `onComplete` alone.
 
 ### What Each Hook Is For
 
@@ -46,7 +46,7 @@ A step that throws does not skip the callbacks that have already started: `onErr
 - `wrapDispatch`: control execution around the network call.
 - `decoratePromise`: improve caller ergonomics (for example, add `.json()`).
 - `onSuccess` / `onError`: record outcomes, metrics, and side effects.
-- `onFinally`: cleanup that must always happen, including for a request that failed while it was being prepared.
+- `onFinally`: cleanup that must always happen, including a request that failed after the plugin pipeline started.
 
 ## Plugin Order
 

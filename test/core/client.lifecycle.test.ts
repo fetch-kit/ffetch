@@ -121,34 +121,105 @@ describe('lifecycle around request preparation', () => {
     expect(client.pendingRequests).toHaveLength(0)
   })
 
-  it('tracks a request while it prepares and lets abortAll cancel it', async () => {
-    let releasePreparation!: () => void
-    const preparation = new Promise<void>((resolve) => {
-      releasePreparation = resolve
-    })
+  it('settles a request that is stuck in preparation when abortAll cancels it', async () => {
+    const events: string[] = []
     const fetchHandler = vi.fn(async () => new Response('ok'))
     let client!: ReturnType<typeof createClient>
     client = createClient({
+      hooks: {
+        onAbort: () => {
+          events.push('onAbort')
+        },
+        onComplete: () => {
+          events.push('onComplete')
+        },
+      },
       plugins: [
         {
-          name: 'slow',
-          preRequest: async () => {
+          name: 'stuck',
+          preRequest: () => {
             // Registered while it is still preparing, so it can be cancelled.
             expect(client.pendingRequests).toHaveLength(1)
-            await preparation
+            events.push('preRequest')
+            // Never settles on its own: the abort is what ends this request.
+            return new Promise<void>(() => {})
+          },
+          onError: () => {
+            events.push('plugin.onError')
+          },
+          onFinally: () => {
+            events.push('plugin.onFinally')
           },
         },
       ],
       fetchHandler,
     })
 
-    const request = client('https://example.com/slow-prep')
+    const request = client('https://example.com/stuck-prep')
     expect(client.pendingRequests).toHaveLength(1)
 
     client.abortAll()
-    releasePreparation()
 
+    // Nothing else releases the hook, so settling here can only come from the
+    // abort itself - and it settles as an aborted request, hooks included.
     await expect(request).rejects.toBeInstanceOf(AbortError)
+    expect(events).toEqual([
+      'preRequest',
+      'onAbort',
+      'onComplete',
+      'plugin.onError',
+      'plugin.onFinally',
+    ])
+    expect(fetchHandler).not.toHaveBeenCalled()
+    expect(client.pendingRequests).toHaveLength(0)
+  })
+
+  it('settles preparation when the caller aborts its own signal', async () => {
+    const controller = new AbortController()
+    const fetchHandler = vi.fn(async () => new Response('ok'))
+    const client = createClient({
+      plugins: [
+        { name: 'stuck', preRequest: () => new Promise<void>(() => {}) },
+      ],
+      fetchHandler,
+    })
+
+    const request = client('https://example.com/stuck-prep-signal', {
+      signal: controller.signal,
+    })
+    controller.abort()
+
+    const error = await request.catch((err: unknown) => err)
+    expect(error).toBeInstanceOf(AbortError)
+    expect((error as AbortError).message).toBe('Request was aborted by user')
+    expect(fetchHandler).not.toHaveBeenCalled()
+    expect(client.pendingRequests).toHaveLength(0)
+  })
+
+  it('settles preparation when the request a transform returns is aborted', async () => {
+    const controller = new AbortController()
+    const fetchHandler = vi.fn(async () => new Response('ok'))
+    const client = createClient({
+      hooks: {
+        transformRequest: async (request) =>
+          // The replacement carries a signal of its own, which preparation has
+          // to start observing too.
+          new Request(request, { signal: controller.signal }),
+      },
+      plugins: [
+        { name: 'stuck', preRequest: () => new Promise<void>(() => {}) },
+      ],
+      fetchHandler,
+    })
+
+    const request = client('https://example.com/stuck-prep-transform')
+    expect(client.pendingRequests).toHaveLength(1)
+    // Let the transform replace the request before aborting the replacement.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    controller.abort()
+
+    const error = await request.catch((err: unknown) => err)
+    expect(error).toBeInstanceOf(AbortError)
     expect(fetchHandler).not.toHaveBeenCalled()
     expect(client.pendingRequests).toHaveLength(0)
   })
