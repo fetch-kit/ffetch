@@ -23,7 +23,7 @@ Plugins run in a deterministic pipeline with two phases:
 - `wrapDispatch`: wraps request execution (`before` / `after` around `next(ctx)`).
 - `decoratePromise`: runs when the request promise is created, before it is returned to the caller.
 - `onSuccess` / `onError`: runs when the request settles.
-- `onFinally`: always runs after success or error.
+- `onFinally`: always runs after success or error, for every plugin, even when preparation or another hook fails.
 
 ### Per-request Timeline
 
@@ -37,6 +37,8 @@ For one request, the flow is:
 6. Later, when it settles, run `onSuccess` **or** `onError`.
 7. Run `onFinally`.
 
+A step that throws does not skip the callbacks that have already started: `onError` and `onFinally` reach every plugin, and core `onComplete` reports the failure even when it happens during preparation, before the request reaches the network.
+
 ### What Each Hook Is For
 
 - `preRequest`: prepare request context (auth, validation, early abort).
@@ -44,7 +46,7 @@ For one request, the flow is:
 - `wrapDispatch`: control execution around the network call.
 - `decoratePromise`: improve caller ergonomics (for example, add `.json()`).
 - `onSuccess` / `onError`: record outcomes, metrics, and side effects.
-- `onFinally`: cleanup that must always happen.
+- `onFinally`: cleanup that must always happen, including for a request that failed while it was being prepared.
 
 ## Plugin Order
 
@@ -306,7 +308,7 @@ const jsonShortcutPlugin: ClientPlugin<
 - Keep plugins side-effect free outside controlled state.
 - Prefer per-request data in `ctx.state` instead of global mutable variables.
 - Use `order` only when needed; document ordering assumptions.
-- Avoid throwing from `onFinally` unless intentional.
+- Avoid throwing from `onFinally` unless intentional. A throw fails an otherwise successful request; on a request that already failed, the original error is kept.
 - Use `as const` plugin tuples for best TypeScript extension inference.
 
 ## App-Level Concerns

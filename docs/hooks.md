@@ -359,6 +359,10 @@ If an error occurs or retry is needed:
 After core hooks run, plugin lifecycle callbacks may still run (for example plugin `onSuccess`, `onError`, and `onFinally`).
 If a plugin throws after core completion, core `onError` is not re-fired and core `onComplete` may already have run with success arguments.
 
+A request that fails while it is still being prepared still reaches `onComplete`: a `transformRequest` or `before` hook that throws, and a plugin that rejects from `preRequest`, are reported to `onComplete` with that error. A failure that happens before the request exists at all - an invalid `Request` input, for example - has no request to report, so no hook runs and the caller receives the error directly.
+
+Plugin `onError` and `onFinally` run for every plugin, even when one of them throws. A throwing `onFinally` fails a request that succeeded, while a request that already failed keeps its own error; a throwing `onError` replaces the failure it saw, which is how a plugin reports the outcome it decided on (see the circuit breaker's open circuit).
+
 ## Per-Request Hooks
 
 You can override hooks for individual requests:

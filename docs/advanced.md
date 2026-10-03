@@ -115,7 +115,7 @@ setInterval(() => {
   - `promise` - The Promise<Response> for the request
   - `request` - The Request object with URL, headers, method, etc.
   - `controller` - The AbortController for the request (use `.abort()` to cancel)
-  - Requests are automatically added when they start and removed when they complete (success or failure)
+  - Requests are automatically added when they start - preparation included, so `abortAll()` can cancel one that has not been dispatched yet - and removed when they complete (success or failure), even when a plugin hook throws
   - Each client instance maintains its own separate `pendingRequests` array
   - You can abort all requests at once using `client.abortAll()`
 

@@ -10,6 +10,7 @@ import {
   TimeoutError,
 } from '../../src/error.js'
 import type { Hooks } from '../../src/hooks.js'
+import type { ClientPlugin } from '../../src/plugins.js'
 
 const httpStatusArbitrary = fc.constantFrom(200, 204, 400, 404, 429, 500, 503)
 
@@ -569,6 +570,53 @@ describe('core client fuzzing', () => {
         }
       ),
       { numRuns: 500 }
+    )
+  })
+
+  it('cleans up requests when generated plugin hooks fail', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom('preRequest', 'onSuccess', 'onError', 'onFinally'),
+        fc.boolean(),
+        async (hookName, asynchronous) => {
+          const hookError = new Error(`generated ${hookName} failure`)
+          const events: string[] = []
+          const makePlugin = (name: string): ClientPlugin => {
+            const plugin: ClientPlugin = { name }
+            Object.assign(plugin, {
+              [hookName]: async () => {
+                events.push(`${name}.${hookName}`)
+                if (asynchronous) await Promise.resolve()
+                throw hookError
+              },
+            })
+            return plugin
+          }
+
+          const client = createClient({
+            plugins: [makePlugin('a'), makePlugin('b')],
+            fetchHandler: async () => {
+              // `onError` only runs once the request has failed.
+              if (hookName === 'onError') throw new Error('transport failure')
+              return new Response(null)
+            },
+          })
+
+          const result = await Promise.allSettled([
+            client(`https://example.com/plugin-hook-failure/${hookName}`),
+          ])
+          await Promise.resolve()
+
+          expect(result).toHaveLength(1)
+          expect(client.pendingRequests).toHaveLength(0)
+          expect(events[0]).toBe(`a.${hookName}`)
+          if (hookName === 'onError' || hookName === 'onFinally') {
+            // These callbacks reach every plugin, even when one of them throws.
+            expect(events).toEqual([`a.${hookName}`, `b.${hookName}`])
+          }
+        }
+      ),
+      { numRuns: 200 }
     )
   })
 })
