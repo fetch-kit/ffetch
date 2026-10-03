@@ -102,7 +102,7 @@ describe('core client fuzzing', () => {
         fc.uniqueArray(httpStatusArbitrary, { maxLength: 7 }),
         fc.integer({ min: 0, max: 6 }),
         async (statuses, retryStatuses, retries) => {
-          const retrySet = new Set(retryStatuses)
+          const retrySet = new Set<number>(retryStatuses)
           let calls = 0
           const client = createClient({
             retries,

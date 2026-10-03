@@ -22,6 +22,60 @@ import {
   NetworkError,
 } from './error.js'
 
+/**
+ * Body values that ffetch owns in memory, so reading one before the first
+ * attempt cannot stall an upload that is still in flight.
+ */
+function isOwnedBody(body: FFetchRequestInit['body']): boolean {
+  return (
+    typeof body === 'string' ||
+    body instanceof URLSearchParams ||
+    body instanceof Blob ||
+    body instanceof ArrayBuffer ||
+    ArrayBuffer.isView(body) ||
+    body instanceof FormData
+  )
+}
+
+/**
+ * Whether the body can be copied before the first attempt so that a retry can
+ * send it again. Only a body ffetch owns is safe to copy: a `ReadableStream`
+ * needs `duplex: 'half'`, and a `Request` input or a request returned by a
+ * `transformRequest` hook can carry an upload that only ends when the server
+ * acknowledges it, so buffering one would stall the first attempt. Those
+ * requests keep the previous behaviour instead and skip the body on a retry.
+ */
+function canReplayBody(
+  input: RequestInfo | URL,
+  init: FFetchRequestInit,
+  hasTransformRequest: boolean
+): boolean {
+  if (hasTransformRequest) return false
+  if (input instanceof Request) return false
+  return isOwnedBody(init.body)
+}
+
+/**
+ * Reads the request body so that a retry can send it again. Sending a request
+ * consumes its body, so the copy has to be taken before the first attempt, and
+ * reading a clone leaves the original request untouched. Each attempt then gets
+ * an independent body instead of a clone of the already-sent request, which
+ * fails with "unusable".
+ *
+ * Only called for a body ffetch owns, which is why the request always has one.
+ */
+async function captureReplayableBody(
+  request: Request
+): Promise<Uint8Array | null> {
+  try {
+    return new Uint8Array(await request.clone().arrayBuffer())
+  } catch {
+    // The body is already consumed, for example by a hook: keep the previous
+    // behaviour rather than failing here.
+    return null
+  }
+}
+
 export function createClient<
   TPlugins extends readonly ClientPlugin<
     PluginExtensionBase,
@@ -112,6 +166,18 @@ export function createClient<
           ? init.retryDelay
           : clientDefaultRetryDelay
       const effectiveShouldRetry = init.shouldRetry ?? clientDefaultShouldRetry
+
+      // Only a request that can be retried needs a re-sendable body, and only a
+      // body ffetch owns can be copied without stalling an upload.
+      const replayableBody =
+        effectiveRetries > 0 &&
+        canReplayBody(
+          input,
+          init,
+          effectiveHooks.transformRequest !== undefined
+        )
+          ? await captureReplayableBody(request)
+          : null
 
       // AbortSignal.timeout/any logic
       const effectiveTimeout = init.timeout ?? clientDefaultTimeout
@@ -220,6 +286,10 @@ export function createClient<
         dispatchSignal: AbortSignal | undefined
       ) => {
         const requestForAttempt = dispatchCtx.request
+        // A plugin can replace the request, in which case the copy no longer
+        // matches it and each attempt falls back to cloning.
+        const attemptBody =
+          dispatchCtx.request === request ? replayableBody : null
         let attempt = 0
         const shouldRetryWithHook = async (
           ctx: import('./types').RetryContext
@@ -275,9 +345,15 @@ export function createClient<
               for (const plugin of plugins) {
                 await plugin.beforeAttempt?.(dispatchCtx, attempt)
               }
-              const reqWithSignal = new Request(requestForAttempt.clone(), {
-                signal: dispatchSignal,
-              })
+              const reqWithSignal =
+                attemptBody === null
+                  ? new Request(requestForAttempt.clone(), {
+                      signal: dispatchSignal,
+                    })
+                  : new Request(requestForAttempt, {
+                      signal: dispatchSignal,
+                      body: attemptBody.slice(),
+                    })
               try {
                 const handler = init.fetchHandler ?? fetchHandler ?? fetch
                 const response = await handler(reqWithSignal)

@@ -69,4 +69,34 @@ describe('retry POST with body — Node.js native fetch (undici)', () => {
     expect(res.status).toBe(500)
     expect(callCount).toBe(3)
   })
+
+  it('sends the same body on the retry as on the first attempt', async () => {
+    const bodies: string[] = []
+    requestHandler = (req, res) => {
+      let body = ''
+      req.setEncoding('utf8')
+      req.on('data', (chunk: string) => {
+        body += chunk
+      })
+      req.on('end', () => {
+        bodies.push(body)
+        const status = bodies.length === 1 ? 500 : 200
+        res.writeHead(status, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: status === 200 }))
+      })
+    }
+
+    const f = createClient({ retries: 1 })
+    const res = await f(`${baseUrl}/api`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'value' }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(bodies).toEqual([
+      JSON.stringify({ key: 'value' }),
+      JSON.stringify({ key: 'value' }),
+    ])
+  })
 })

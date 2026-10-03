@@ -39,7 +39,7 @@ describe('FFetch per-request override', () => {
     const client = createClient({ retryDelay: ({ attempt: _attempt }) => 1 })
     mockFetchImpl(new Response('ok'), { failTimes: 2 })
     const origSetTimeout = globalThis.setTimeout
-    vi.stubGlobal('setTimeout', (fn, ms) => {
+    vi.stubGlobal('setTimeout', (fn: () => void, ms: number) => {
       delays.push(ms)
       return origSetTimeout(fn, 0)
     })
