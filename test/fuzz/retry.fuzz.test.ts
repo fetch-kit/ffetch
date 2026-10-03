@@ -254,11 +254,13 @@ describe('retry policy fuzzing', () => {
           status: 429,
           headers: { 'Retry-After': String(seconds) },
         })
-        const delay = defaultDelay({
+        const ctx = {
           attempt: 1,
           request: new Request('https://example.com/retry-after'),
           response,
-        })
+        }
+        const delay =
+          typeof defaultDelay === 'function' ? defaultDelay(ctx) : defaultDelay
 
         expect(delay).toBe(seconds * 1_000)
       }),

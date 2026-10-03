@@ -1,5 +1,3 @@
-/// <reference types="node" />
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createClient } from '../../src/client.js'

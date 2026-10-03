@@ -1,0 +1,17 @@
+{
+  // The test files get their own project. A `tsconfig.json` inside `test/` is
+  // what the language server actually picks up, because it only auto-discovers
+  // files named `tsconfig.json` while walking up from the open file. That is
+  // what makes `@types/node` available for `global`, `process`, `node:*` etc.
+  // (the root config narrows `types` to ["vitest"] and excludes test files).
+  // The build keeps using the root tsconfig.json.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "rootDir": "..",
+    "types": ["vitest", "node"]
+  },
+  "include": ["**/*"],
+  "exclude": ["../dist", "../node_modules"]
+}

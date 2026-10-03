@@ -1,8 +1,3 @@
-// The node builtins below need `@types/node`. The repo tsconfig sets
-// `types: ["vitest"]` and excludes test files, so the language server needs an
-// explicit reference to type-check this file.
-/// <reference types="node" />
-
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
