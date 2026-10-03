@@ -13,10 +13,10 @@ import type {
   PluginRequestPromiseExtensionBase,
 } from '../plugins.js'
 import type { RetryDelay } from '../retry.js'
-import { retry } from '../retry.js'
 import { AbortError, RetryLimitError } from '../error.js'
 import { isCoreError, isHttpErrorStatus } from './core-error.js'
 import { canReplayBody, captureReplayableBody } from './replay-body.js'
+import { runRetrySequence } from './retry-execution.js'
 import { combineRequestSignals, createTimeoutSignal } from './signals.js'
 import {
   createAttemptState,
@@ -294,7 +294,6 @@ async function executeRequest(
       const attemptBody =
         dispatchCtx.request === run.request ? replayableBody : null
       const state = createAttemptState()
-      let attempt = 0
 
       const signals: AttemptSignals = {
         controller,
@@ -312,47 +311,22 @@ async function executeRequest(
         state,
       }
 
-      const shouldRetryWithHook = async (ctx: RetryContext) => {
-        attempt = ctx.attempt
-        dispatchCtx.metadata.retry.attempt = attempt
-        dispatchCtx.metadata.retry.lastError = ctx.error
-        dispatchCtx.metadata.retry.lastResponse = ctx.response
-        // Deciding on a retry is local code's job, so an error raised here is
-        // local code's - even when a policy throws the attempt's own error on
-        // with `throw ctx.error`.
-        const retrying = await runLocal(state, dispatchCtx, () =>
-          effectiveShouldRetry(ctx)
-        )
-        dispatchCtx.metadata.retry.shouldRetryResult = retrying
-        if (retrying && attempt <= effectiveRetries) {
-          await runLocal(state, dispatchCtx, () =>
-            hooks.onRetry?.(
-              requestForAttempt,
-              attempt - 1,
-              ctx.error,
-              ctx.response
-            )
-          )
-        }
-        if (retrying) {
-          const body = ctx.response?.body
-          if (body) {
-            void body.cancel().catch(() => {})
-          }
-        }
-        return retrying
-      }
-
       let res: Response
       try {
-        res = await retry(
-          (number) => runAttempt(attemptRun, number),
-          effectiveRetries,
-          effectiveRetryDelay,
-          shouldRetryWithHook,
-          requestForAttempt,
-          dispatchSignal
-        )
+        // The attempt list runs in one place: the loop, the attempt numbers,
+        // the decision, the hook and the wait, so how a retry runs cannot drift
+        // from how it is reported.
+        res = await runRetrySequence({
+          attempt: (number) => runAttempt(attemptRun, number),
+          retries: effectiveRetries,
+          delay: effectiveRetryDelay,
+          request: requestForAttempt,
+          metadata: dispatchCtx.metadata.retry,
+          decide: effectiveShouldRetry,
+          onRetry: hooks.onRetry,
+          local: (run) => runLocal(state, dispatchCtx, run),
+          signal: dispatchSignal,
+        })
       } catch (err: unknown) {
         dispatchCtx.metadata.retry.lastError = err
         // Errors the core raises for the request keep their identity, and are

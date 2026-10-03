@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createClient } from '../../src/client.js'
 import { AbortError, TimeoutError } from '../../src/error.js'
-import { retry, defaultDelay } from '../../src/retry.js'
+import { runRetrySequence } from '../../src/internals/retry-execution.js'
+import type { PluginRetryMetadata } from '../../src/plugins.js'
+import { defaultDelay } from '../../src/retry.js'
 import { shouldRetry } from '../../src/should-retry.js'
 
 const statusArbitrary = fc.constantFrom(200, 204, 400, 404, 429, 500, 503)
@@ -27,6 +29,14 @@ function isRetryable(status: number): boolean {
   return status === 429 || status >= 500
 }
 
+/** The retry metadata a request starts with, as the pipeline allocates it. */
+function retryMetadata(
+  configuredRetries: number,
+  configuredDelay: number
+): PluginRetryMetadata {
+  return { configuredRetries, configuredDelay, attempt: 0 }
+}
+
 function expectedResponseRun(statuses: number[], retries: number) {
   const budget = retries + 1
   for (let attempt = 0; attempt < budget; attempt++) {
@@ -45,18 +55,42 @@ afterEach(() => {
 describe('retry policy fuzzing', () => {
   it('uses the default retry decision when no callback is supplied', async () => {
     let calls = 0
-    const response = await retry(
-      async () => {
+    const response = await runRetrySequence({
+      attempt: async () => {
         calls++
         return new Response(null, { status: 200 })
       },
-      1,
-      0,
-      undefined,
-      new Request('https://example.com/default-retry-decision')
-    )
+      retries: 1,
+      delay: 0,
+      request: new Request('https://example.com/default-retry-decision'),
+      metadata: retryMetadata(1, 0),
+    })
 
     expect(response.status).toBe(200)
+    expect(calls).toBe(2)
+  })
+
+  it('waits out the delay between attempts when nothing cancels the request', async () => {
+    vi.useFakeTimers()
+
+    let calls = 0
+    const sequence = runRetrySequence({
+      attempt: async () => {
+        calls++
+        return new Response(null, { status: calls === 1 ? 503 : 200 })
+      },
+      retries: 1,
+      delay: 50,
+      decide: shouldRetry,
+      request: new Request('https://example.com/retry-delay'),
+      metadata: retryMetadata(1, 50),
+    })
+
+    await vi.advanceTimersByTimeAsync(49)
+    expect(calls).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect((await sequence).status).toBe(200)
     expect(calls).toBe(2)
   })
 
@@ -70,17 +104,18 @@ describe('retry policy fuzzing', () => {
           const expected = expectedResponseRun(statuses, retries)
           const request = new Request('https://example.com/retry-fuzz')
 
-          const result = await retry(
-            async () => {
+          const result = await runRetrySequence({
+            attempt: async () => {
               const status = statuses[Math.min(calls, statuses.length - 1)]
               calls++
               return new Response(null, { status })
             },
             retries,
-            0,
-            shouldRetry,
-            request
-          )
+            delay: 0,
+            decide: shouldRetry,
+            request,
+            metadata: retryMetadata(retries, 0),
+          })
 
           expect(result.status).toBe(expected.status)
           expect(calls).toBe(expected.attempts)
@@ -137,8 +172,8 @@ describe('retry policy fuzzing', () => {
           let result: Response | undefined
           let error: unknown
           try {
-            result = await retry(
-              async () => {
+            result = await runRetrySequence({
+              attempt: async () => {
                 const outcome = outcomes[Math.min(calls, outcomes.length - 1)]
                 calls++
                 if (outcome.kind === 'error') {
@@ -147,10 +182,11 @@ describe('retry policy fuzzing', () => {
                 return new Response(null, { status: outcome.status })
               },
               retries,
-              0,
-              shouldRetry,
-              request
-            )
+              delay: 0,
+              decide: shouldRetry,
+              request,
+              metadata: retryMetadata(retries, 0),
+            })
           } catch (caught) {
             error = caught
           }
@@ -265,6 +301,64 @@ describe('retry policy fuzzing', () => {
         expect(delay).toBe(seconds * 1_000)
       }),
       { numRuns: 1_000 }
+    )
+  })
+  it('reports one outcome per attempt and records the attempt a run ends on', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(retryOutcomeArbitrary, { minLength: 1, maxLength: 8 }),
+        fc.integer({ min: 0, max: 6 }),
+        async (outcomes, retries) => {
+          let calls = 0
+          const offered: { error?: unknown; response?: Response }[] = []
+          const metadata = retryMetadata(retries, 0)
+
+          let result: Response | undefined
+          try {
+            result = await runRetrySequence({
+              attempt: async () => {
+                const outcome = outcomes[Math.min(calls, outcomes.length - 1)]
+                calls++
+                if (outcome.kind === 'error') {
+                  throw new TypeError(outcome.message)
+                }
+                return new Response(null, { status: outcome.status })
+              },
+              retries,
+              delay: 0,
+              decide: (ctx) => {
+                offered.push({ error: ctx.error, response: ctx.response })
+                return shouldRetry(ctx)
+              },
+              request: new Request('https://example.com/retry-report'),
+              metadata,
+            })
+          } catch {
+            // A run that ends in a failure is an outcome here, not the subject.
+          }
+
+          // A decision is asked about one attempt, and an attempt either fails or
+          // produces a response - never both, and never one an earlier attempt
+          // left behind.
+          for (const ctx of offered) {
+            expect(ctx.error === undefined).toBe(ctx.response !== undefined)
+          }
+
+          // The attempt the run ends on is the attempt the metadata describes.
+          expect(metadata.attempt).toBe(calls)
+          expect(metadata.lastResponse).toBe(result)
+          if (result === undefined) {
+            expect(metadata.lastError).toBeInstanceOf(TypeError)
+          }
+
+          // The attempt that uses up the budget is never offered for a retry, so
+          // no answer about it is left in the metadata.
+          if (calls === retries + 1) {
+            expect(metadata.shouldRetryResult).toBeUndefined()
+          }
+        }
+      ),
+      { numRuns: 500 }
     )
   })
 })

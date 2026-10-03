@@ -125,6 +125,19 @@ setInterval(() => {
 
 If a request is aborted while waiting between retries, ffetch stops waiting immediately and does not start another retry attempt.
 
+### How a Retry Runs
+
+Every attempt is numbered from 1, and the same sequence runs one after another:
+
+1. **The attempt runs.** It is only offered for a retry while the budget allows it: with `retries: 2` at most three attempts run, and the retry policy is consulted after the first and the second - never after the last one the budget allows.
+2. **The attempt is recorded.** `ctx.metadata.retry` describes it as `attempt`, and as `lastError` or `lastResponse` - never both, because an attempt either fails or produces a response. Every attempt is recorded, the last one the budget allows included, so a plugin that reads the metadata while the request settles sees the attempt that actually ran.
+3. **`shouldRetry` decides.** It reads `attempt` (the attempt that just finished), and sees either `error` for a rejection or `response` for a resolved response - so a policy can re-send a resolved 503 as well as a failed attempt. The answer is kept as `ctx.metadata.retry.shouldRetryResult`, which stays unset for an attempt that was never offered for a retry.
+4. **`onRetry` runs**, when the attempt is being re-sent. Its `attempt` argument is zero-based (`0` is the first retry), and it is told the request and the error or the response of the attempt that finished - that attempt's own outcome, never the one before it.
+5. **A discarded response is released.** The body of a response that is being re-sent is cancelled, so a rejected response is not left streaming.
+6. **`retryDelay` computes the wait, and the wait runs.** Aborting the request during the wait ends the wait immediately, and the retry that follows is refused before it is dispatched, so the request ends as aborted.
+
+A retry policy or an `onRetry` hook that throws is local code failing, not the dependency: the error reaches the caller as it was raised instead of being reported as a `RetryLimitError`.
+
 ### Custom Retry Delay
 
 You can provide a function for `retryDelay` that receives a context object:

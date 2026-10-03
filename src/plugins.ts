@@ -56,8 +56,16 @@ export type PluginSignalMetadata = {
   combined?: AbortSignal
 }
 
+/**
+ * The retry sequence as plugins read it while a request runs: how the request
+ * was configured, and the attempt that finished most recently. The attempt a
+ * request ends on is recorded too, so `onSuccess`, `onError` and `onFinally`
+ * read the attempt that actually ran rather than the one before it.
+ */
 export type PluginRetryMetadata = {
+  /** How many retries the request was configured with. */
   configuredRetries: number
+  /** The delay the request was configured with, as it was configured. */
   configuredDelay:
     | number
     | ((ctx: {
@@ -66,9 +74,20 @@ export type PluginRetryMetadata = {
         response?: Response
         error?: unknown
       }) => number)
+  /** The number of the attempt that finished most recently, from 1. */
   attempt: number
+  /**
+   * What the retry decision said about that attempt. Unset while the attempt has
+   * not been offered for a retry - the last one the budget allows never is.
+   */
   shouldRetryResult?: boolean
+  /**
+   * The error the recorded attempt failed with. The pipeline also records the
+   * error a request ends with here, including an error raised outside the
+   * attempt - by a retry policy or a hook, for example.
+   */
   lastError?: unknown
+  /** The response the recorded attempt produced. */
   lastResponse?: Response
 }
 

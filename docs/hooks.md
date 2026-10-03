@@ -349,7 +349,7 @@ When a request is made, hooks execute in this order:
 If an error occurs or retry is needed:
 
 1. `onError` - Called on core execution errors
-2. `onRetry` - Called before retry attempts
+2. `onRetry` - Called before the next attempt runs, after the retry decision and before the retry delay is waited out. Its `attempt` argument is zero-based (`0` = the first retry), it is told the error or the response of the attempt that finished, and the body of a response that is discarded for the retry is released once the hook returns.
 3. `onTimeout` - Called on timeout errors
 4. `onAbort` - Called on abort errors
 5. Plugin `onCircuitOpen` callback - Called when circuit opens, and on blocked requests while already open

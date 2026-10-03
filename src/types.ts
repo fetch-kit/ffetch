@@ -5,6 +5,12 @@ import type {
   PluginRequestPromiseExtensionBase,
 } from './plugins'
 
+/**
+ * What the retry policy and the retry delay are told about the attempt that just
+ * finished. An attempt either fails or produces a response, so exactly one of
+ * `error` and `response` describes it - and neither is an error or a response an
+ * earlier attempt left behind.
+ */
 export interface RetryContext {
   attempt: number
   request: Request
