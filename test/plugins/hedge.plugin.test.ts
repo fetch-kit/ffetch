@@ -455,6 +455,59 @@ describe('hedgePlugin loser cancellation', () => {
     expect(signals[0].aborted).toBe(false)
     expect(signals[1].aborted).toBe(true)
   })
+
+  it('keeps the fallback response alive when the last attempt fails', async () => {
+    vi.useFakeTimers()
+
+    const signals: AbortSignal[] = []
+    let calls = 0
+
+    const next: PluginDispatch = async (ctx) => {
+      calls++
+      signals.push(ctx.request.signal)
+      if (calls === 1) return new Response('error', { status: 503 })
+      throw new Error('hedge failed')
+    }
+
+    const dispatch = hedgePlugin({ delay: 50 }).wrapDispatch!(next)
+    const resultP = dispatch(makeCtx())
+
+    await vi.advanceTimersByTimeAsync(60)
+
+    // Attempt 0 produced the fallback the race settles on, so it stays alive.
+    const result = await resultP
+    expect(result.status).toBe(503)
+    expect(signals[0].aborted).toBe(false)
+    expect(signals[1].aborted).toBe(true)
+  })
+
+  it('keeps a late fallback response alive when the hedge already answered', async () => {
+    vi.useFakeTimers()
+
+    const signals: AbortSignal[] = []
+    const d1 = defer<Response>()
+    let calls = 0
+
+    const next: PluginDispatch = async (ctx) => {
+      calls++
+      signals.push(ctx.request.signal)
+      if (calls === 1) return d1.promise
+      return new Response('hedge-error', { status: 503 })
+    }
+
+    const dispatch = hedgePlugin({ delay: 50 }).wrapDispatch!(next)
+    const resultP = dispatch(makeCtx())
+
+    await vi.advanceTimersByTimeAsync(60)
+    // The hedge settles first, the original settles last and wins the race.
+    d1.resolve(new Response('original-error', { status: 503 }))
+
+    const result = await resultP
+    expect(result.status).toBe(503)
+    expect(await result.text()).toBe('original-error')
+    expect(signals[0].aborted).toBe(false)
+    expect(signals[1].aborted).toBe(true)
+  })
 })
 
 describe('hedgePlugin delay', () => {
