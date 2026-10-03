@@ -19,7 +19,7 @@ Plugins run in a deterministic pipeline with two phases:
 2. **Request phase (runs for every request)**
 
 - `preRequest`: runs before dispatch. Use it to validate, prepare, or fail fast.
-- `beforeAttempt`: runs immediately before each physical fetch attempt (initial, retry, and hedged). Use it to stamp per-attempt metadata such as trace spans.
+- `beforeAttempt`: runs immediately before each physical fetch attempt (initial, retry, and hedged). Use it to stamp per-attempt metadata such as trace spans. Throwing from it refuses the attempt: the request is not sent, and the error reaches the caller exactly as the hook raised it.
 - `wrapDispatch`: wraps request execution (`before` / `after` around `next(ctx)`).
 - `decoratePromise`: runs when the request promise is created, before it is returned to the caller.
 - `onSuccess` / `onError`: runs when the request settles.
@@ -42,7 +42,7 @@ A step that throws does not skip the callbacks that have already started: once a
 ### What Each Hook Is For
 
 - `preRequest`: prepare request context (auth, validation, early abort).
-- `beforeAttempt`: stamp per-attempt metadata (for example, trace spans) right before each physical fetch.
+- `beforeAttempt`: stamp per-attempt metadata (for example, trace spans) right before each physical fetch, or refuse the attempt by throwing.
 - `wrapDispatch`: control execution around the network call.
 - `decoratePromise`: improve caller ergonomics (for example, add `.json()`).
 - `onSuccess` / `onError`: record outcomes, metrics, and side effects.

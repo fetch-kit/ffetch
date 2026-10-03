@@ -2,7 +2,11 @@ import fc from 'fast-check'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createClient } from '../../src/client.js'
-import { CircuitOpenError, RetryLimitError } from '../../src/error.js'
+import {
+  CircuitOpenError,
+  HttpError,
+  RetryLimitError,
+} from '../../src/error.js'
 import { circuitPlugin } from '../../src/plugins/circuit.js'
 
 afterEach(() => {
@@ -249,6 +253,76 @@ describe('circuit plugin fuzzing', () => {
         expect(calls).toBe(threshold)
       }),
       { numRuns: 500 }
+    )
+  })
+
+  it('opens exactly at the configured threshold for a failure status surfaced by throwOnHttpError', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 1, max: 10 }),
+        fc.constantFrom(429, 500, 502, 503, 599),
+        async (threshold, failureStatus) => {
+          let calls = 0
+          const client = createClient({
+            retries: 0,
+            throwOnHttpError: true,
+            plugins: [circuitPlugin({ threshold, reset: 1_000 })],
+            fetchHandler: async () => {
+              calls++
+              return new Response(null, { status: failureStatus })
+            },
+          })
+
+          for (let attempt = 1; attempt < threshold; attempt++) {
+            await expect(
+              client(`https://example.com/circuit-http-threshold-${attempt}`)
+            ).rejects.toBeInstanceOf(HttpError)
+            expect(client.circuitOpen).toBe(false)
+          }
+
+          await expect(
+            client('https://example.com/circuit-http-threshold-final')
+          ).rejects.toBeInstanceOf(CircuitOpenError)
+          expect(client.circuitOpen).toBe(true)
+          expect(calls).toBe(threshold)
+        }
+      ),
+      { numRuns: 500 }
+    )
+  })
+
+  it('never opens the circuit for a non-failure status, with or without throwOnHttpError', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 1, max: 5 }),
+        fc.constantFrom(400, 401, 403, 404, 410, 422, 451),
+        fc.boolean(),
+        async (threshold, status, throwOnHttpError) => {
+          let calls = 0
+          const client = createClient({
+            retries: 0,
+            throwOnHttpError,
+            plugins: [circuitPlugin({ threshold, reset: 1_000 })],
+            fetchHandler: async () => {
+              calls++
+              return new Response(null, { status })
+            },
+          })
+
+          for (let attempt = 0; attempt < threshold + 2; attempt++) {
+            const request = client(`https://example.com/circuit-4xx-${attempt}`)
+            if (throwOnHttpError) {
+              await expect(request).rejects.toBeInstanceOf(HttpError)
+            } else {
+              expect((await request).status).toBe(status)
+            }
+            expect(client.circuitOpen).toBe(false)
+          }
+
+          expect(calls).toBe(threshold + 2)
+        }
+      ),
+      { numRuns: 300 }
     )
   })
 })

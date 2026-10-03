@@ -637,6 +637,52 @@ describe('Native fetch rejection shapes', () => {
     expect(global.fetch).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps the error a plugin raises to refuse an attempt', async () => {
+    // `beforeAttempt` runs before the attempt is built, so a plugin that throws
+    // there is refusing the request rather than reporting a failure of the
+    // dependency. The core hands that error to the caller as it is instead of
+    // re-labelling it as a `RetryLimitError`, and core `onError` stays silent
+    // because the verdict is not the core's.
+    const refusal = new Error('not admitted')
+    const onError = vi.fn()
+    const fetchHandler = vi.fn(async () => new Response('ok'))
+    const f = createClient({
+      retries: 2,
+      retryDelay: 0,
+      fetchHandler,
+      hooks: { onError },
+      plugins: [
+        {
+          name: 'refuser',
+          beforeAttempt: () => {
+            throw refusal
+          },
+        },
+      ],
+    })
+
+    await expect(f('https://example.com')).rejects.toBe(refusal)
+    expect(fetchHandler).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('keeps the error a retry hook raises while deciding on a retry', async () => {
+    // A retry hook is not the attempt either, so its error is never converted
+    // into `RetryLimitError`.
+    const attemptFailure = new Error('attempt failed')
+    const hookFailure = new Error('retry decision failed')
+    global.fetch = vi.fn().mockRejectedValue(attemptFailure)
+    const f = createClient({
+      retries: 2,
+      retryDelay: 0,
+      shouldRetry: () => {
+        throw hookFailure
+      },
+    })
+
+    await expect(f('https://example.com')).rejects.toBe(hookFailure)
+  })
+
   it('classifies a TimeoutError-shaped DOMException even without an aborted signal', async () => {
     global.fetch = vi
       .fn()

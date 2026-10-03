@@ -23,6 +23,7 @@ See also:
 | Aborted by user                    |         throws         |         throws          | Throws AbortError                   |
 | Retry limit reached (other errors) |         throws         |         throws          | Throws RetryLimitError              |
 | `transformResponse`/`after` throws |         throws         |         throws          | Throws the hook's error             |
+| Plugin refuses the request         |         throws         |         throws          | Throws the plugin's error           |
 
 ## Error Identity Across Entrypoints
 
@@ -72,6 +73,7 @@ The error classes are shared between the root entrypoint and the plugin subpaths
 
 - If a `transformResponse` or `after` hook throws, that error propagates to the caller unchanged. The original response is **not** returned and no HTTP fallback is applied.
 - Errors thrown by other core hooks follow the same rule: they are never converted into `HttpError`, `NetworkError`, or `RetryLimitError`.
+- A hook a plugin provides is treated the same way. A plugin that refuses a request by throwing (`preRequest`, `beforeAttempt`, or `wrapDispatch`) sends its own error to the caller, and only an attempt that actually failed becomes a `RetryLimitError`. Whether a refusal is attempted again is the retry policy's decision, not the core's.
 
 ### 8. Native Rejection Shapes
 
@@ -123,4 +125,4 @@ await client('https://example.com', { signal: ui.signal }) // throws AbortError 
 - Only the final response after all retries is considered for throwing `HttpError`.
 - All other error types (timeout, abort, network, circuit, retry limit) are always thrown as errors, regardless of the flag.
 - The last response of a retry chain is never returned as a fallback: if the final attempt fails with a transport error, that error is thrown even when earlier attempts produced a response.
-- A rejection is only reclassified when it is identified as a cancellation or as a transport failure. Every other error keeps its own type and message and surfaces as a `RetryLimitError` once the retries are exhausted.
+- A rejection is only reclassified when it is identified as a cancellation or as a transport failure. Every other error keeps its own type and message and surfaces as a `RetryLimitError` once the retries are exhausted. This is about the request's own rejection: an error raised by a hook or by a plugin is never converted into a `RetryLimitError`.

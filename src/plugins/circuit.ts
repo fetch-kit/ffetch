@@ -1,5 +1,11 @@
 import type { ClientPlugin } from '../plugins.js'
-import { CircuitOpenError } from '../error.js'
+import {
+  CircuitOpenError,
+  HttpError,
+  NetworkError,
+  RetryLimitError,
+  TimeoutError,
+} from '../error.js'
 
 export type CircuitPluginExtension = {
   circuitOpen: boolean
@@ -42,20 +48,66 @@ export function circuitPlugin(
   let nextAttempt = 0
   let isOpen = false
 
-  const shouldCountFailure = (
-    response?: Response,
-    error?: unknown
-  ): boolean => {
-    if (error) {
-      return true
-    }
-    if (response && (response.status >= 500 || response.status === 429)) {
-      return true
-    }
-    return false
+  /**
+   * Statuses that count as a dependency failure. The same rule decides retries
+   * (`should-retry.ts`) and is applied to a response the client returns.
+   */
+  const isFailureStatus = (status: number): boolean =>
+    status >= 500 || status === 429
+
+  /**
+   * The response an `HttpError` carries. `throwOnHttpError` throws it with the
+   * final response as `cause`, and the status is read structurally because
+   * `instanceof Response` is unreliable for a response built by a custom
+   * `fetchHandler` or in another realm.
+   */
+  const carriedResponse = (error: HttpError): Response | undefined => {
+    const carried = error.cause
+    if (typeof carried !== 'object' || carried === null) return undefined
+    return typeof (carried as { status?: unknown }).status === 'number'
+      ? (carried as Response)
+      : undefined
   }
 
-  const onSuccess = async (req: Request, response: Response) => {
+  /**
+   * Classifies one observation the pipeline reports. Only the dependency's own
+   * failures count: a 5xx or 429, or a `NetworkError`, a `TimeoutError` or a
+   * `RetryLimitError` thrown for the attempt. A 4xx is not a failure - including
+   * when `throwOnHttpError` surfaces it as an `HttpError`, because that option
+   * changes how a response reaches the pipeline, not which statuses describe a
+   * broken dependency - and it resets the count the way a success does.
+   *
+   * Everything else reports `undefined` and is ignored by omission, so a local
+   * admission refusal (`BulkheadFullError`), a cancellation (`AbortError`), the
+   * circuit's own `CircuitOpenError`, and errors thrown by hooks or plugins are
+   * never treated as evidence about the dependency.
+   */
+  const classify = (
+    response?: Response,
+    error?: unknown
+  ): { failure: true } | { response: Response } | undefined => {
+    if (error === undefined) {
+      if (response === undefined) return undefined
+      return isFailureStatus(response.status) ? { failure: true } : { response }
+    }
+    if (error instanceof HttpError) {
+      const carried = carriedResponse(error)
+      if (carried === undefined) return undefined
+      return isFailureStatus(carried.status)
+        ? { failure: true }
+        : { response: carried }
+    }
+    if (
+      error instanceof NetworkError ||
+      error instanceof TimeoutError ||
+      error instanceof RetryLimitError
+    ) {
+      return { failure: true }
+    }
+    return undefined
+  }
+
+  const recordSuccess = async (req: Request, response: Response) => {
     const wasOpen = isOpen
     failures = 0
     if (wasOpen) {
@@ -84,6 +136,42 @@ export function circuitPlugin(
     return false
   }
 
+  /**
+   * Refuses a request while the circuit is open. Checked in `preRequest` so a
+   * blocked request never takes a bulkhead slot, and again in `beforeAttempt`,
+   * because a request can wait after the first check - in a queue, or between
+   * retries - while another request opens the circuit.
+   */
+  const assertAdmitted = async (request: Request): Promise<void> => {
+    if (Date.now() < nextAttempt) {
+      await onCircuitOpen?.({ request, reason: { type: 'already-open' } })
+      throw new CircuitOpenError('Circuit is open')
+    }
+  }
+
+  /**
+   * Applies a classification: a failure counts against the threshold and can
+   * open the circuit, a non-failure response resets the counter the way a
+   * success does, and an ignored observation changes nothing.
+   */
+  const observe = async (
+    request: Request,
+    decision: ReturnType<typeof classify>,
+    reason: Omit<
+      Extract<CircuitOpenReason, { type: 'threshold-reached' }>,
+      'type'
+    >
+  ): Promise<void> => {
+    if (decision === undefined) return
+    if ('response' in decision) {
+      await recordSuccess(request, decision.response)
+      return
+    }
+    if (await onFailure(request, reason)) {
+      throw new CircuitOpenError('Circuit is open')
+    }
+  }
+
   return {
     name: 'circuit',
     order,
@@ -94,34 +182,26 @@ export function circuitPlugin(
       })
     },
     preRequest: async (ctx) => {
-      if (Date.now() < nextAttempt) {
-        await onCircuitOpen?.({
-          request: ctx.request,
-          reason: { type: 'already-open' },
-        })
-        throw new CircuitOpenError('Circuit is open')
-      }
+      await assertAdmitted(ctx.request)
+    },
+    /**
+     * Admission is re-checked immediately before every attempt, which is the
+     * only point that runs after a request has finished waiting. A request that
+     * passed `preRequest` while the circuit was closed must not be dispatched
+     * into a circuit that opened in the meantime, for example while it sat in a
+     * bulkhead queue or in a retry delay.
+     */
+    beforeAttempt: async (ctx) => {
+      await assertAdmitted(ctx.request)
     },
     onSuccess: async (ctx, response) => {
-      if (shouldCountFailure(response, undefined)) {
-        const opened = await onFailure(ctx.request, { response })
-        if (opened) {
-          throw new CircuitOpenError('Circuit is open')
-        }
-      } else {
-        await onSuccess(ctx.request, response)
-      }
+      await observe(ctx.request, classify(response, undefined), { response })
     },
     onError: async (ctx, error) => {
       if (error instanceof CircuitOpenError) {
         return
       }
-      if (shouldCountFailure(undefined, error)) {
-        const opened = await onFailure(ctx.request, { error })
-        if (opened) {
-          throw new CircuitOpenError('Circuit is open')
-        }
-      }
+      await observe(ctx.request, classify(undefined, error), { error })
     },
   }
 }

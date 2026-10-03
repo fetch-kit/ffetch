@@ -176,6 +176,25 @@ function isCancellationReason(err: unknown): boolean {
   return name === 'AbortError' || name === 'TimeoutError'
 }
 
+/**
+ * Whether `err` is an error the core raises for the request itself: a
+ * cancellation, a timeout, a transport failure, or retries running out. These
+ * describe what happened to the request rather than who decided it, so they
+ * keep their identity everywhere they are reported. An error that reports
+ * another party's verdict - a plugin refusing a request, for example - is not
+ * one of them and stays with whoever raised it.
+ */
+function isCoreError(
+  err: unknown
+): err is TimeoutError | AbortError | NetworkError | RetryLimitError {
+  return (
+    err instanceof TimeoutError ||
+    err instanceof AbortError ||
+    err instanceof NetworkError ||
+    err instanceof RetryLimitError
+  )
+}
+
 /** Tolerates a missing signal, so a call site can list every signal it has. */
 function isSignalAborted(signal: AbortSignal | null | undefined): boolean {
   return signal?.aborted === true
@@ -281,15 +300,7 @@ export function createClient<
 
       let coreErrorReported = false
       const reportCoreError = async (error: unknown, hookRequest: Request) => {
-        if (coreErrorReported) return
-        if (
-          !(error instanceof TimeoutError) &&
-          !(error instanceof AbortError) &&
-          !(error instanceof NetworkError) &&
-          !(error instanceof RetryLimitError)
-        ) {
-          return
-        }
+        if (coreErrorReported || !isCoreError(error)) return
 
         coreErrorReported = true
         if (error instanceof TimeoutError) {
@@ -490,6 +501,11 @@ export function createClient<
             return retrying
           }
 
+          // The error the attempt itself failed with, when that is what leaves
+          // the retry loop. It is the only error a `RetryLimitError` describes;
+          // an error raised while the request was being prepared for an attempt
+          // belongs to whoever raised it.
+          let attemptFailure: unknown
           let res: Response
           try {
             res = await retry(
@@ -515,25 +531,32 @@ export function createClient<
                     )
                   }
                 }
+                // A plugin can refuse an attempt by throwing here - when the
+                // request is no longer admitted, for example. That happens
+                // before the attempt is built, so it is not a failed attempt:
+                // the plugin's error is the answer the request gets.
                 for (const plugin of plugins) {
                   await plugin.beforeAttempt?.(dispatchCtx, attempt)
                 }
-                const reqWithSignal =
-                  attemptBody === null
-                    ? new Request(requestForAttempt.clone(), {
-                        signal: dispatchSignal,
-                      })
-                    : new Request(requestForAttempt, {
-                        signal: dispatchSignal,
-                        body: attemptBody.slice(),
-                      })
                 try {
+                  const reqWithSignal =
+                    attemptBody === null
+                      ? new Request(requestForAttempt.clone(), {
+                          signal: dispatchSignal,
+                        })
+                      : new Request(requestForAttempt, {
+                          signal: dispatchSignal,
+                          body: attemptBody.slice(),
+                        })
                   const handler = init.fetchHandler ?? fetchHandler ?? fetch
                   const response = await handler(reqWithSignal)
                   dispatchCtx.metadata.retry.lastResponse = response
                   return response
                 } catch (err) {
                   dispatchCtx.metadata.retry.lastError = err
+                  // Building the request for the attempt counts as part of it:
+                  // either way this is the error the attempt failed with.
+                  attemptFailure = err
                   // Cancellation is read from the signals rather than from the
                   // rejection value: `fetch` rejects with the abort reason of the
                   // signal it was given, which is a `DOMException` named
@@ -591,24 +614,20 @@ export function createClient<
             )
           } catch (err: unknown) {
             dispatchCtx.metadata.retry.lastError = err
-            if (err instanceof TimeoutError) {
+            // Errors the core raises for the request keep their identity, and
+            // are the ones the lifecycle hooks describe.
+            if (isCoreError(err)) {
               if (dispatchCtx === pluginContext) {
                 await reportCoreError(err, requestForAttempt)
               }
               throw err
             }
-            if (err instanceof AbortError) {
-              if (dispatchCtx === pluginContext) {
-                await reportCoreError(err, requestForAttempt)
-              }
-              throw err
-            }
-            if (err instanceof NetworkError) {
-              if (dispatchCtx === pluginContext) {
-                await reportCoreError(err, requestForAttempt)
-              }
-              throw err
-            }
+            // Any other error was raised while the request was being prepared
+            // for an attempt rather than by an attempt failing: a plugin
+            // refusing it in `beforeAttempt`, or a retry hook that throws. The
+            // raiser's error is the answer the request gets - re-labelling it
+            // as a `RetryLimitError` would report the dependency as the reason.
+            if (err !== attemptFailure) throw err
             const retryErr = new RetryLimitError(
               typeof err === 'object' &&
                 err &&
