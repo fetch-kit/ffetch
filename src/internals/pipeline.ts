@@ -218,7 +218,7 @@ async function executeRequest(
     context.metadata.signals.transformed = replacement.signal
     // The entry is registered before preparation resolves, so the request a
     // monitor reads stays the one that is being prepared.
-    if (run.entry) run.entry.request = replacement
+    run.entry!.request = replacement
     // A replacement request can carry a signal of its own.
     watchSignal(replacement.signal)
   }
@@ -237,11 +237,6 @@ async function executeRequest(
     }
     await hooks.before?.(run.request)
 
-    // From here on the request is one the plugins see: a hook that fails later
-    // is reported to them, while a hook that failed already is reported to the
-    // core hooks alone.
-    run.admitted = true
-
     // Only a request that can be retried needs a re-sendable body, and only a
     // body ffetch owns can be copied without stalling an upload.
     const replayableBody =
@@ -249,6 +244,17 @@ async function executeRequest(
       canReplayBody(input, init, hooks.transformRequest !== undefined)
         ? await captureReplayableBody(run.request)
         : null
+
+    // The plugins are handed the request from here on. `startedAt` is recorded
+    // at this boundary rather than when the context was allocated, so a slow
+    // preparation hook does not shift the elapsed time a plugin computes from
+    // it.
+    context.metadata.startedAt = Date.now()
+
+    // A hook that fails later is reported to the plugins, while a hook that
+    // failed already - while the replayable body was still being copied, for
+    // example - is reported to the core hooks alone.
+    run.admitted = true
 
     for (const plugin of plugins) {
       await plugin.preRequest?.(context)
@@ -490,7 +496,10 @@ async function executeRequest(
       ? await runOnFinally(plugins, context)
       : { failed: false, error: undefined }
 
+    // The entry is registered before preparation settles and taken out once, by
+    // the request that registered it, so it is always here to remove.
     const index = pendingRequests.indexOf(entry)
+    /* v8 ignore else */
     if (index > -1) {
       pendingRequests.splice(index, 1)
     }

@@ -174,6 +174,101 @@ describe('lifecycle around request preparation', () => {
     expect(client.pendingRequests).toHaveLength(0)
   })
 
+  it('records startedAt at the boundary the plugins are handed the request at', async () => {
+    let preparationEnded = 0
+    let pluginStartedAt = 0
+    let pluginRanAt = 0
+
+    const client = createClient({
+      hooks: {
+        before: async () => {
+          // A slow preparation hook: the request must not be measured from
+          // before it finished.
+          await new Promise((resolve) => setTimeout(resolve, 20))
+          preparationEnded = Date.now()
+        },
+      },
+      plugins: [
+        {
+          name: 'p',
+          preRequest: (ctx) => {
+            pluginStartedAt = ctx.metadata.startedAt
+            pluginRanAt = Date.now()
+          },
+        },
+      ],
+      fetchHandler: async () => new Response('ok'),
+    })
+
+    await client('https://example.com/started-at-boundary')
+
+    expect(pluginStartedAt).toBeGreaterThanOrEqual(preparationEnded)
+    expect(pluginStartedAt).toBeLessThanOrEqual(pluginRanAt)
+  })
+
+  it('reports a request cancelled while its body is being copied to the core hooks alone', async () => {
+    const events: string[] = []
+    const onComplete = vi.fn()
+    let bodyCopyStarted!: () => void
+    const copyStarted = new Promise<void>((resolve) => {
+      bodyCopyStarted = resolve
+    })
+
+    // A body ffetch owns, whose read never finishes: the request is cancelled
+    // while the copy a retry would re-send is still being taken from it.
+    class UnfinishedBody extends Blob {
+      stream(): ReturnType<Blob['stream']> {
+        return new ReadableStream({
+          pull() {
+            bodyCopyStarted()
+          },
+        })
+      }
+    }
+
+    const client = createClient({
+      retries: 1,
+      hooks: { onComplete },
+      plugins: [
+        {
+          name: 'p',
+          preRequest: () => {
+            events.push('preRequest')
+          },
+          onError: () => {
+            events.push('onError')
+          },
+          onFinally: () => {
+            events.push('onFinally')
+          },
+        },
+      ],
+      fetchHandler: async () => {
+        events.push('fetch')
+        return new Response('ok')
+      },
+    })
+
+    const request = client('https://example.com/cancelled-during-body-copy', {
+      method: 'POST',
+      body: new UnfinishedBody(['x']),
+    })
+    await copyStarted
+    client.abortAll()
+
+    await expect(request).rejects.toBeInstanceOf(AbortError)
+
+    // The plugins were never handed the request, so its failure is reported to
+    // the core hooks alone.
+    expect(events).toEqual([])
+    expect(onComplete).toHaveBeenCalledWith(
+      expect.any(Request),
+      undefined,
+      expect.any(AbortError)
+    )
+    expect(client.pendingRequests).toHaveLength(0)
+  })
+
   it('settles preparation when the caller aborts its own signal', async () => {
     const controller = new AbortController()
     const fetchHandler = vi.fn(async () => new Response('ok'))
