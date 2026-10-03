@@ -415,12 +415,12 @@ Solution: Either upgrade to Node.js 20.6+ or add a polyfill
 npm install abort-controller-x
 ```
 
-#### Timeout behaves as AbortError
+#### Timeout is classified as `TimeoutError`
+
+`ffetch` classifies a timed-out request as `TimeoutError` and fires `onTimeout`, regardless of how the environment names the native rejection:
 
 ```
-This is expected in some environments. Check for both error types:
-
-if (err instanceof TimeoutError || err instanceof AbortError) {
+if (err instanceof TimeoutError) {
   // Handle timeout
 }
 ```
