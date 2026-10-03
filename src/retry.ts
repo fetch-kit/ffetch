@@ -1,7 +1,17 @@
 import type { RetryContext } from './types.js'
 
+/**
+ * How long to wait before an attempt is re-sent: a fixed delay, or a function of
+ * the attempt that just finished.
+ */
 export type RetryDelay = number | ((ctx: RetryContext) => number)
 
+/**
+ * The delay a client uses when none is configured: what the response asks for
+ * when it carries a `Retry-After`, and exponential backoff with jitter
+ * otherwise. The sequence that waits it out lives in
+ * `internals/retry-execution.ts`, which is the only caller.
+ */
 export const defaultDelay: RetryDelay = (ctx) => {
   const retryAfter = ctx.response?.headers.get('Retry-After')
   if (retryAfter) {
@@ -11,72 +21,4 @@ export const defaultDelay: RetryDelay = (ctx) => {
     if (!isNaN(date)) return Math.max(0, date - Date.now())
   }
   return 2 ** ctx.attempt * 200 + Math.random() * 100
-}
-
-function waitForRetryDelay(ms: number, signal?: AbortSignal): Promise<void> {
-  if (ms <= 0) return Promise.resolve()
-  return new Promise((resolve) => {
-    if (!signal) {
-      setTimeout(resolve, ms)
-      return
-    }
-
-    if (signal.aborted) {
-      resolve()
-      return
-    }
-
-    const onAbort = () => {
-      clearTimeout(timer)
-      resolve()
-    }
-
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort)
-      resolve()
-    }, ms)
-
-    signal.addEventListener('abort', onAbort, { once: true })
-  })
-}
-
-export async function retry(
-  fn: (attempt: number) => Promise<Response>,
-  retries: number,
-  delay: RetryDelay,
-  shouldRetry: (ctx: RetryContext) => boolean | Promise<boolean> = () => true,
-  request: Request,
-  signal?: AbortSignal
-): Promise<Response> {
-  let lastErr: unknown
-  let lastRes: Response | undefined
-
-  for (let i = 0; i <= retries; i++) {
-    const ctx: RetryContext = {
-      attempt: i + 1,
-      request,
-      response: lastRes,
-      error: lastErr,
-    }
-    try {
-      lastRes = await fn(i + 1)
-    } catch (err) {
-      lastErr = err
-      ctx.error = err
-      if (i === retries || !(await shouldRetry(ctx))) throw err
-      const wait = typeof delay === 'function' ? delay(ctx) : delay
-      await waitForRetryDelay(wait, signal)
-      continue
-    }
-
-    ctx.response = lastRes
-    ctx.error = undefined
-    if (i < retries && (await shouldRetry(ctx))) {
-      const wait = typeof delay === 'function' ? delay(ctx) : delay
-      await waitForRetryDelay(wait, signal)
-      continue
-    }
-    return lastRes
-  }
-  throw lastErr
 }

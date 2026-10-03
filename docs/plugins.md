@@ -39,6 +39,14 @@ For one request, the flow is:
 
 A step that throws does not skip the callbacks that have already started: once a request has entered the plugin pipeline, `onError` and `onFinally` reach every plugin. Core `onComplete` reports the failure even when it happens earlier - a `transformRequest` or `before` hook that throws while the request is still being prepared, before the pipeline starts, reaches `onComplete` alone.
 
+### Attempts and Retries
+
+What `beforeAttempt` sees is one attempt of a retry sequence the core runs:
+
+- Attempts are numbered from 1, and `beforeAttempt(ctx, attempt)` is given the number of the attempt about to be dispatched - the initial attempt is `1`, the first retry is `2`, and a hedge is a separate dispatch with its own numbering.
+- `ctx.metadata.retry` describes the attempt that finished most recently: `attempt`, `lastError`, `lastResponse`, `shouldRetryResult`, and the `configuredRetries`/`configuredDelay` the request was configured with.
+- A plugin that dispatches the request again through `next(ctx)` runs its own sequence, so a retried or hedged dispatch keeps its own attempt numbers.
+
 ### What Each Hook Is For
 
 - `preRequest`: prepare request context (auth, validation, early abort).
