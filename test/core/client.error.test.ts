@@ -242,6 +242,15 @@ describe('Integration: Custom Errors', () => {
       return err instanceof NetworkError && err.cause === nativeErr
     })
   })
+
+  it('throws NetworkError on the message Safari uses for network errors', async () => {
+    const nativeErr = new TypeError('Load failed')
+    global.fetch = vi.fn().mockRejectedValue(nativeErr)
+    const f = createClient()
+    await expect(f('https://example.com')).rejects.toSatisfy((err) => {
+      return err instanceof NetworkError && err.cause === nativeErr
+    })
+  })
 })
 
 describe('Advanced/Edge Cases: Custom Errors', () => {
@@ -468,5 +477,292 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
         expect(err.message).toBe('Retry limit reached')
       }
     }
+  })
+})
+
+// Regression coverage for the shapes native `fetch` actually rejects with: a
+// timeout rejects with a `DOMException` named "TimeoutError" (not
+// "AbortError"), `abort(reason)` rejects with `reason` verbatim, and a network
+// failure rejects with a `TypeError('fetch failed')` that carries the real
+// reason in `cause`. None of these may fall through to `RetryLimitError`.
+describe('Native fetch rejection shapes', () => {
+  /**
+   * Mirrors native behaviour: reject with the abort reason of the signal the
+   * request was given, and never resolve otherwise.
+   */
+  function rejectWithSignalReason() {
+    return vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const signal = input instanceof Request ? input.signal : undefined
+      return await new Promise<Response>((_resolve, reject) => {
+        if (signal?.aborted) {
+          reject(signal.reason)
+          return
+        }
+        signal?.addEventListener('abort', () => reject(signal.reason))
+      })
+    })
+  }
+
+  /**
+   * Node rejects with `TypeError('fetch failed')` and hangs the real reason off
+   * `cause`. Built with `Object.assign` because the project's `lib` is pinned to
+   * ES2020, so the ES2022 `{ cause }` option of the error constructors is not
+   * part of the type surface - at runtime `cause` is an own property either way,
+   * which is what the classifier reads.
+   */
+  function fetchFailed(cause: unknown, message = 'fetch failed') {
+    return Object.assign(new TypeError(message), { cause })
+  }
+
+  /**
+   * The shape Node reports when several addresses were tried: one entry per
+   * attempt in `errors`. Built with `Object.assign` because the `AggregateError`
+   * global (ES2021) is not part of the ES2020 lib.
+   */
+  function allAddressesFailed(errors: unknown[], message: string) {
+    return Object.assign(new Error(message), { errors })
+  }
+
+  it('classifies a native timeout as TimeoutError and does not retry it', async () => {
+    global.fetch = rejectWithSignalReason()
+    const onTimeout = vi.fn()
+    const onAbort = vi.fn()
+    const onRetry = vi.fn()
+    const f = createClient({
+      timeout: 20,
+      retries: 2,
+      hooks: { onTimeout, onAbort, onRetry },
+    })
+
+    await expect(f('https://example.com')).rejects.toSatisfy(
+      (err) =>
+        err instanceof TimeoutError &&
+        err instanceof Error &&
+        err.cause instanceof DOMException &&
+        err.cause.name === 'TimeoutError'
+    )
+
+    expect(onTimeout).toHaveBeenCalledTimes(1)
+    expect(onAbort).not.toHaveBeenCalled()
+    // The attempt must not be retried: the aborted signal would short-circuit
+    // the next attempt anyway.
+    expect(onRetry).not.toHaveBeenCalled()
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  }, 1000)
+
+  it('classifies an abort with a custom Error reason as AbortError', async () => {
+    global.fetch = rejectWithSignalReason()
+    const onAbort = vi.fn()
+    const onRetry = vi.fn()
+    const controller = new AbortController()
+    const f = createClient({
+      timeout: 5_000,
+      retries: 2,
+      hooks: { onAbort, onRetry },
+    })
+
+    const promise = f('https://example.com', { signal: controller.signal })
+    setTimeout(() => controller.abort(new Error('stop now')), 20)
+
+    await expect(promise).rejects.toSatisfy(
+      (err) =>
+        err instanceof AbortError &&
+        err.message === 'Request was aborted by user'
+    )
+    expect(onAbort).toHaveBeenCalledTimes(1)
+    expect(onRetry).not.toHaveBeenCalled()
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  }, 1000)
+
+  it('classifies an abort with a string reason as AbortError', async () => {
+    global.fetch = rejectWithSignalReason()
+    const controller = new AbortController()
+    const f = createClient({ timeout: 5_000 })
+
+    const promise = f('https://example.com', { signal: controller.signal })
+    setTimeout(() => controller.abort('cancelled by user'), 20)
+
+    await expect(promise).rejects.toBeInstanceOf(AbortError)
+  }, 1000)
+
+  it('classifies a node-fetch style Error named AbortError as AbortError', async () => {
+    global.fetch = vi.fn().mockRejectedValue(
+      Object.assign(new Error('The user aborted a request.'), {
+        name: 'AbortError',
+      })
+    )
+    const f = createClient({ retries: 1 })
+
+    await expect(f('https://example.com')).rejects.toBeInstanceOf(AbortError)
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('classifies Node connection and DNS failures as NetworkError', async () => {
+    const refused = Object.assign(
+      new Error('connect ECONNREFUSED 127.0.0.1:1'),
+      { code: 'ECONNREFUSED' }
+    )
+    const dns = Object.assign(
+      new Error('getaddrinfo ENOTFOUND does-not-exist.invalid'),
+      { code: 'ENOTFOUND' }
+    )
+
+    for (const nativeErr of [
+      fetchFailed(refused),
+      fetchFailed(allAddressesFailed([refused], 'fetch failed')),
+      fetchFailed(dns),
+    ]) {
+      global.fetch = vi.fn().mockRejectedValue(nativeErr)
+      const f = createClient({ retries: 0 })
+
+      await expect(f('https://example.com')).rejects.toSatisfy(
+        (err) => err instanceof NetworkError && err.cause === nativeErr
+      )
+    }
+  })
+
+  it('keeps a non-transport fetch rejection at RetryLimitError', async () => {
+    global.fetch = vi
+      .fn()
+      .mockRejectedValue(
+        new TypeError(
+          'Cannot construct a Request with a Request object that has already been used.'
+        )
+      )
+    const f = createClient({ retries: 1, retryDelay: 0 })
+
+    await expect(f('https://example.com')).rejects.toBeInstanceOf(
+      RetryLimitError
+    )
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('classifies a TimeoutError-shaped DOMException even without an aborted signal', async () => {
+    global.fetch = vi
+      .fn()
+      .mockRejectedValue(
+        new DOMException(
+          'The operation was aborted due to timeout',
+          'TimeoutError'
+        )
+      )
+    const f = createClient({ retries: 1, timeout: 0 })
+
+    await expect(f('https://example.com')).rejects.toSatisfy(
+      (err) =>
+        err instanceof TimeoutError &&
+        err.cause instanceof DOMException &&
+        err.cause.name === 'TimeoutError'
+    )
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('classifies a rejection named TimeoutError from another client', async () => {
+    // Rejections from other HTTP clients carry the name without being a
+    // `DOMException`, for example `got`'s `TimeoutError`.
+    const nativeErr = Object.assign(new Error('handler timed out'), {
+      name: 'TimeoutError',
+    })
+    global.fetch = vi.fn().mockRejectedValue(nativeErr)
+    const onTimeout = vi.fn()
+    const f = createClient({ retries: 1, hooks: { onTimeout } })
+
+    await expect(f('https://example.com')).rejects.toSatisfy(
+      (err) =>
+        err instanceof TimeoutError &&
+        err.message === 'signal timed out' &&
+        err.cause === nativeErr
+    )
+    expect(onTimeout).toHaveBeenCalledTimes(1)
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('classifies network codes found behind an unrecognized message', async () => {
+    const refused = Object.assign(new Error('connect ECONNREFUSED ::1:1'), {
+      code: 'ECONNREFUSED',
+    })
+    const nativeErr = fetchFailed(
+      allAddressesFailed([refused], 'all addresses failed'),
+      'connection failure'
+    )
+    global.fetch = vi.fn().mockRejectedValue(nativeErr)
+    const f = createClient({ retries: 0 })
+
+    await expect(f('https://example.com')).rejects.toSatisfy(
+      (err) => err instanceof NetworkError && err.cause === nativeErr
+    )
+  })
+
+  it('skips unrelated entries while walking an errors array', async () => {
+    const unrelated = new Error('address was skipped')
+    const refused = Object.assign(new Error('connect ECONNREFUSED ::1:1'), {
+      code: 'ECONNREFUSED',
+    })
+    global.fetch = vi
+      .fn()
+      .mockRejectedValue(
+        fetchFailed(
+          allAddressesFailed([unrelated, refused], 'all addresses failed'),
+          'connection failure'
+        )
+      )
+    const f = createClient({ retries: 0 })
+
+    await expect(f('https://example.com')).rejects.toBeInstanceOf(NetworkError)
+  })
+
+  it('stops walking a cause chain once it is unreasonably deep', async () => {
+    // The depth cap keeps a cyclic or hostile rejection from being walked
+    // forever, so a code buried below it counts as an application error.
+    let deep: unknown = Object.assign(new Error('connect ECONNRESET'), {
+      code: 'ECONNRESET',
+    })
+    for (let i = 0; i < 7; i++) {
+      deep = Object.assign(new TypeError('wrapped'), { cause: deep })
+    }
+    global.fetch = vi.fn().mockRejectedValue(deep)
+    const f = createClient({ retries: 0 })
+
+    await expect(f('https://example.com')).rejects.toBeInstanceOf(
+      RetryLimitError
+    )
+  })
+
+  it('falls back to a generic message when the transport rejection has none', async () => {
+    global.fetch = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error(''), { code: 'ECONNRESET' }))
+    const f = createClient({ retries: 0 })
+
+    await expect(f('https://example.com')).rejects.toSatisfy(
+      (err) =>
+        err instanceof NetworkError && err.message === 'Network error occurred'
+    )
+  })
+
+  it('treats a rejection with the library AbortError as a cancellation', async () => {
+    const aborted = new AbortError('handler aborted the request')
+    global.fetch = vi.fn().mockRejectedValue(aborted)
+    const onAbort = vi.fn()
+    const f = createClient({ retries: 2, hooks: { onAbort } })
+
+    await expect(f('https://example.com')).rejects.toBe(aborted)
+    expect(onAbort).toHaveBeenCalledTimes(1)
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a TimeoutError rejected by a custom fetchHandler', async () => {
+    // A handler that runs its own timer maps onto the library's errors, so the
+    // classification has to survive instead of becoming an AbortError.
+    const timedOut = new TimeoutError('handler timed out')
+    global.fetch = vi.fn().mockRejectedValue(timedOut)
+    const onTimeout = vi.fn()
+    const onAbort = vi.fn()
+    const f = createClient({ retries: 2, hooks: { onTimeout, onAbort } })
+
+    await expect(f('https://example.com')).rejects.toBe(timedOut)
+    expect(onTimeout).toHaveBeenCalledTimes(1)
+    expect(onAbort).not.toHaveBeenCalled()
+    expect(global.fetch).toHaveBeenCalledTimes(1)
   })
 })

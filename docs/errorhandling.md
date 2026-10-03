@@ -42,6 +42,8 @@ The error classes are shared between the root entrypoint and the plugin subpaths
 
 - If a network error (e.g., lost connection, DNS failure) occurs and all retries are exhausted, the client **throws a `NetworkError`**.
 - This happens regardless of the `throwOnHttpError` flag, and even when an earlier attempt returned a response (for example a retried `503`). The earlier response is discarded and its body is cancelled; it is not returned as a fallback.
+- The failure is recognized in both native shapes: a browser message (`Failed to fetch`, `NetworkError when attempting to fetch resource.`) or Node's `TypeError('fetch failed')` whose `cause` carries the operating system code (`ECONNREFUSED`, `ENOTFOUND`, `EAI_AGAIN`, `ECONNRESET`, `ETIMEDOUT`, `UND_ERR_*`, ...), including an `AggregateError` with one entry per address tried.
+- A recognized network failure is retried like any other retryable failure, so `NetworkError` is thrown once the retries are exhausted.
 
 ### 3. Circuit Breaker
 
@@ -51,11 +53,14 @@ The error classes are shared between the root entrypoint and the plugin subpaths
 ### 4. Timeout
 
 - If the request times out (exceeds the `timeout` value), the client **throws a `TimeoutError`**.
+- Native `fetch` rejects a timed-out request with a `DOMException` named `TimeoutError`, not `AbortError`, and `ffetch` classifies that rejection as a `TimeoutError` too.
 - This happens regardless of the `throwOnHttpError` flag.
 
 ### 5. Abort
 
 - If the request is aborted by the user (via `AbortController`), the client **throws an `AbortError`**.
+- Native `fetch` rejects with the abort reason of the signal it was given: a `DOMException` named `AbortError` by default, or the value passed to `abort(reason)`, which may be any value - including a plain `Error` or a string. Any rejection while a request signal is aborted is classified as an `AbortError`.
+- A cancellation is never retried, so `retries` does not delay the rejection.
 - This happens regardless of the `throwOnHttpError` flag.
 
 ### 6. Retry Limit
@@ -67,6 +72,21 @@ The error classes are shared between the root entrypoint and the plugin subpaths
 
 - If a `transformResponse` or `after` hook throws, that error propagates to the caller unchanged. The original response is **not** returned and no HTTP fallback is applied.
 - Errors thrown by other core hooks follow the same rule: they are never converted into `HttpError`, `NetworkError`, or `RetryLimitError`.
+
+### 8. Native Rejection Shapes
+
+`fetch` does not use a single error shape, so `ffetch` classifies a rejection from the signals it handed to the request and from the rejection itself:
+
+| Native rejection                                                                                                                                                                          | Recognized as                                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `AbortSignal.timeout()` fires -> a `DOMException` named `TimeoutError`                                                                                                                    | `TimeoutError` (`onTimeout`)                                                 |
+| A request signal is aborted -> the abort reason verbatim (a `DOMException` named `AbortError`, an `Error`, or a string)                                                                   | `AbortError` (`onAbort`)                                                     |
+| `TypeError('fetch failed')` whose `cause` carries a network `code` (`ECONNREFUSED`, `ENOTFOUND`, `EAI_AGAIN`, `ECONNRESET`, `ETIMEDOUT`, `UND_ERR_*`, ...) or an `AggregateError` of them | `NetworkError`                                                               |
+| `TypeError` with a browser message (`Failed to fetch`, `NetworkError when attempting to fetch resource.`, Safari's `Load failed`, ...)                                                    | `NetworkError`                                                               |
+| The library's own `AbortError` or `TimeoutError`, or any other rejection carrying one of those names (a custom `fetchHandler`, another HTTP client)                                       | The library error as-is, otherwise normalized to `TimeoutError`/`AbortError` |
+| Anything else                                                                                                                                                                             | Left untouched -> `RetryLimitError` after the retries                        |
+
+Recognized cancellations and timeouts are never retried, because the aborted signal would only cancel the retry as well. Recognized network failures are retried like any other retryable failure.
 
 ## Examples
 
@@ -88,6 +108,13 @@ await client3('https://example.com/slow') // throws TimeoutError
 const controller = new AbortController()
 controller.abort()
 await client('https://example.com', { signal: controller.signal }) // throws AbortError
+
+// Native shapes are classified the same way
+await client('https://example.com/slow') // throws TimeoutError (onTimeout fires)
+
+const ui = new AbortController()
+ui.abort('cancelled by the user interface')
+await client('https://example.com', { signal: ui.signal }) // throws AbortError (onAbort fires)
 ```
 
 ## Notes
@@ -96,3 +123,4 @@ await client('https://example.com', { signal: controller.signal }) // throws Abo
 - Only the final response after all retries is considered for throwing `HttpError`.
 - All other error types (timeout, abort, network, circuit, retry limit) are always thrown as errors, regardless of the flag.
 - The last response of a retry chain is never returned as a fallback: if the final attempt fails with a transport error, that error is thrown even when earlier attempts produced a response.
+- A rejection is only reclassified when it is identified as a cancellation or as a transport failure. Every other error keeps its own type and message and surfaces as a `RetryLimitError` once the retries are exhausted.
