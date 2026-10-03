@@ -1,5 +1,63 @@
 # ffetch
 
+## 5.7.1
+
+### Patch Changes
+
+- 417b11c: Count only the dependency's own failures towards the circuit breaker, refuse an attempt at dispatch when the circuit opened while the request was waiting, and tell plugins which stage raised each error.
+
+  `circuitPlugin` counted every error that reached the pipeline, so a 4xx surfaced by `throwOnHttpError` as an `HttpError`, a `BulkheadFullError`, a request the caller aborted, and an error thrown by a hook or another plugin could all open the circuit. A failure is now the same set of signals retries use: a 5xx or 429 status - read from the response, and also from the response `throwOnHttpError` carries on the `HttpError` - or a `NetworkError`, `TimeoutError` or `RetryLimitError` thrown for the attempt. Anything else is ignored, except that a non-failure response, including a 4xx surfaced as an `HttpError`, resets the consecutive failure count the way a success does. Being refused locally is no longer evidence that the dependency is down.
+
+  Admission is also re-checked immediately before every attempt, rather than only when the request is prepared, so a request that was admitted while the circuit was closed and then waited - during a retry delay, for example - is refused instead of being dispatched into an open circuit. That refusal reaches the caller as a `CircuitOpenError` instead of being wrapped in a `RetryLimitError`, which described it as retries that ran out because of the dependency.
+
+  That last part is what the core now does for every plugin: a `RetryLimitError` describes an attempt that failed, and nothing else. An error raised while a request is being prepared for an attempt - a plugin refusing it in `beforeAttempt`, or a retry hook that throws - reaches the caller unchanged, so refusing a request no longer needs support from the core.
+
+  The core also states which stage raised the error it reports instead of leaving a plugin to infer it from the error's type. `ctx.metadata.provenance` is `'attempt'` when the request's own attempt raised the error and `'hook'` when local code did - a plugin refusing the request, a retry policy or `onRetry` hook that threw, a `transformResponse` or `after` hook that failed, another plugin's reporting hook - and a request that has not reached an attempt yet is local code. A `beforeAttempt` plugin that refuses with a `TimeoutError`, or a `transformResponse` hook that throws an `HttpError` carrying a 503, is therefore no longer read as a dependency failure by a plugin that classifies failures the way `circuitPlugin` does. `PluginProvenance` is exported for typing the field, and it is optional so a context built by hand still works and reads as local code.
+
+  The core's own decision uses the same stage rather than comparing error objects, so a retry policy or hook that rethrows the attempt's own error (`throw ctx.error`) keeps its error instead of having it wrapped and relabelled as the dependency's.
+
+- 04bb6b7: Run the retry sequence from one internal executor instead of three places.
+
+  The loop, the attempt counter, the retry decision, the `onRetry` hook, the release of a discarded response body and the wait between attempts were split across `retry()`, the pipeline's `shouldRetryWithHook` wrapper and `runAttempt`, which each wrote part of `ctx.metadata.retry` and kept part of the state: the pipeline counted attempts a second time, guarded `onRetry` with a condition the loop had already applied, and only the pipeline's copy of the metadata write described the attempt a policy had just seen.
+
+  `runRetrySequence` in `src/internals/retry-execution.ts` now owns the sequence, and the pipeline hands it the attempts to run, the policy, the hook and the metadata to keep up to date. The sequence keeps its shape: attempts are still numbered from 1, the policy is still consulted only for the attempts a retry budget can follow, `onRetry` still receives a zero-based retry number and still runs after the decision, before a discarded response body is cancelled and before the delay is waited out, a wait is still cut short by a cancellation, and an error raised by the policy, the hook or the attempt still reaches the caller with the same identity and provenance.
+
+  Consolidating it also fixed two things the sequence reported that did not match what it documents. Both are visible to `shouldRetry`, `onRetry` and `ctx.metadata.retry`, and both are covered by tests now:
+
+  - An attempt that fails is reported with its own error and no response. The context it was reported in also carried the response an earlier attempt left behind, so a policy that reads `response` could decide on a response that was no longer the answer, `onRetry` was told about it, and its body - already released when the retry discarded it - could be released again.
+  - Every attempt is recorded in `ctx.metadata.retry`, the last one a request's budget allows included. That attempt used to leave the metadata on the attempt before it (or on `0` with `retries: 0`) while `onSuccess`, `onError` and `onFinally` ran, and `shouldRetryResult` kept the previous attempt's answer: it is now unset for an attempt that was never offered for a retry.
+
+  `src/retry.ts` keeps the delay contract (`RetryDelay`, `defaultDelay`) and no longer exports the loop, which was internal to the pipeline either way: `retry()` was never part of the public API in `src/index.ts`.
+
+- 94ee3f3: Skip `Blob` request bodies in the default dedupe hash, so distinct payloads that share a MIME type and size are no longer collapsed into one request.
+- bad5ad1: Keep a client created with an empty plugin list usable in TypeScript.
+
+  `createClient({ plugins: [] })`, `createClient({ plugins: [] as const })` and an options object typed as `FFetchOptions<[]>` produced an uncallable client: the plugin extensions inferred `never`, which made the whole client `never`, so a call failed with "This expression is not callable" and `pendingRequests`/`abortAll` appeared to be missing. `[]` infers `never[]` and `[] as const` infers `readonly []`, and for an empty plugin union `UnionToIntersection<never>` resolves to `unknown`, whose `Extract<..., object>` is `never`.
+
+  - An empty plugin list now contributes an empty extension object instead of erasing the extensions, so the client and the promise its calls return stay usable.
+  - Plugins installed through a non-empty list are unaffected: their extensions are still intersected into the client and into the call result.
+
+- e71f995: Share the error module across every entrypoint so the error classes keep a single identity. The CommonJS build previously inlined its own copy of the error classes into each bundle, so a `CircuitOpenError` thrown by `@fetchkit/ffetch/plugins/circuit` - or a `BulkheadFullError` thrown by `@fetchkit/ffetch/plugins/bulkhead` - failed `instanceof` against the same class imported from `@fetchkit/ffetch`. Errors thrown by the packaged plugins now satisfy `instanceof` against the root exports, in both the ESM and CommonJS builds.
+- 08c0dcd: Fix `hedgePlugin` aborting the response it returns. When every attempt settled without a winner - for example a 5xx from the original attempt and a transport error from the hedge - the plugin aborted the last _launched_ attempt instead of the attempt that produced the returned fallback response, so the body of that response failed with `AbortError` and the real loser kept running. The plugin now tracks which attempt produced the fallback and aborts only the other attempts.
+- 62a5fff: Fix `hedgePlugin` letting `onHedge` errors escape request handling. A synchronous throw or a rejected promise from `onHedge` now rejects the request with that error and aborts every in-flight attempt, instead of surfacing as an unhandled rejection - or, for a synchronous throw, leaving the dispatch promise pending forever. A rejection that arrives after the race has already settled is ignored.
+- 97dd5cb: Classify native `fetch` rejections instead of letting them fall through to `RetryLimitError`. Native `fetch` reports a cancellation with the abort reason of the signal it was given, so a timed-out request now rejects with a `DOMException` named `TimeoutError` rather than `AbortError`, and `controller.abort(reason)` rejects with `reason` verbatim - which may be a plain `Error` or a string. Both are now classified as `TimeoutError`/`AbortError`, fire the `onTimeout`/`onAbort` hooks, and are no longer retried. Network failures are also recognized in their Node shape - `TypeError('fetch failed')` with an `ECONNREFUSED`/`ENOTFOUND`/`EAI_AGAIN`/`ECONNRESET`/`ETIMEDOUT`/`UND_ERR_*` code in `cause`, or an `AggregateError` of them - in addition to the browser messages, so they reject with `NetworkError` instead of `RetryLimitError`. A custom `fetchHandler` that rejects with the library's own `AbortError` or `TimeoutError` keeps that classification instead of being re-wrapped as an `AbortError`, and any other rejection carrying one of those names - `got`'s `TimeoutError`, for example - is classified the same way. Safari's `Load failed` message is recognized as a network failure like the other browser messages.
+- 12523a6: Propagate terminal transport and hook errors instead of returning the last response. A `transformResponse` or `after` hook that throws no longer resolves the request with the original response, and a network failure after an earlier response (for example a retried `503`) now rejects with `NetworkError` instead of returning the previously cancelled response.
+- 44a835d: Replay the request body on every retry attempt. Sending a request consumes its body, so a retried request that carried a body was silently skipped and the previous response was returned instead.
+
+  Only a body ffetch owns is replayed: a `string`, `URLSearchParams`, `Blob`, `ArrayBuffer`, typed array or `FormData` passed in `init`. Other bodies keep the previous behaviour instead of being buffered before the first attempt:
+
+  - a `ReadableStream` body or a `Request` input can be an upload that only ends when the server acknowledges it, so buffering one would stall the request;
+  - a request replaced by a `transformRequest` hook is copied only when the retry starts, which still throws if the hook's body was already sent.
+
+- 4d51fb6: Run the lifecycle to completion when a request fails while it is being prepared, and never leak a pending request.
+
+  A hook that threw during preparation - `transformRequest`, `before`, or a plugin `preRequest` - rejected past the rest of the pipeline: core `onComplete` and plugin `onError`/`onFinally` were skipped, so a caller could not release what it had set up for the request.
+
+  - Core `onComplete` now runs for a request that fails during preparation, and plugin `onError`/`onFinally` run whenever a request has entered the plugin pipeline.
+  - `onError` and `onFinally` run for every plugin, even when one of them throws. A throwing `onFinally` still fails a request that succeeded, while a request that already failed keeps its own error; a throwing `onError` still replaces the failure it saw, which is how `circuitPlugin` reports an open circuit.
+  - A request always leaves `client.pendingRequests`, so repeated hook failures no longer accumulate leaked entries.
+  - A request is registered as soon as the call starts, so `client.abortAll()` and the caller's own signal settle a request that is still preparing, even when a preparation hook never resolves.
+
 ## 5.7.0
 
 ### Minor Changes
