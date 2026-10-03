@@ -5,6 +5,7 @@ export type {
   PluginRequestContext,
   PluginDispatch,
   PluginSetupContext,
+  PluginProvenance,
 } from './plugins'
 
 export { createClient } from './client'

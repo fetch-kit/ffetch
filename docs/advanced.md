@@ -219,10 +219,13 @@ This is useful for:
 
 ### How it Works
 
-- A **failure** is counted when the response status is 5xx or 429, or when a network error is thrown. Other 4xx responses (400, 401, 403, 404, etc.) are **not** counted as failures — they reset the consecutive failure count as if the request succeeded.
+- A **failure** is counted when the attempt failed against the dependency: a response with a 5xx or 429 status, or a `NetworkError`, `TimeoutError` or `RetryLimitError` thrown for the attempt. This is the same set of signals retries use, and the status is read even when `throwOnHttpError` surfaces the response as an `HttpError`. Only an error the attempt itself raised counts, which the core reports to plugins as `ctx.metadata.provenance`.
+- Other 4xx responses (400, 401, 403, 404, etc.) are **not** counted as failures — they reset the consecutive failure count as if the request succeeded, with or without `throwOnHttpError`.
+- Failures that are not the dependency's are never counted: a request rejected by the bulkhead, a request the caller aborted, an error thrown by a hook or plugin, and a request the circuit itself refused. That holds even when the error a hook throws is one of the core error types above, because the type describes the failure rather than who raised it. Being refused locally is not evidence that the dependency is down.
 - When the number of consecutive failures reaches the `threshold`, the circuit "opens" and all further requests fail fast with a `CircuitOpenError`
 - After the `reset` period (in milliseconds), the circuit "closes" and requests are allowed again
 - If a request succeeds or returns a non-failure 4xx, the failure count resets
+- Admission is checked when a request is prepared **and again immediately before every attempt**, so a request that was admitted while the circuit was closed and then waited — during a retry delay, for example — is refused with a `CircuitOpenError` instead of being sent into an open circuit
 - If `onCircuitOpen` is configured, it runs both when the circuit opens and when requests are blocked while it is already open
 
 ### Configuration

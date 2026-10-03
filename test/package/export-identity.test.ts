@@ -33,9 +33,9 @@ type ErrorConstructors = {
 
 type CircuitPluginModule = {
   circuitPlugin: (options: { threshold: number; reset: number }) => {
-    onError?: (
+    onSuccess?: (
       ctx: PluginRequestContext,
-      error: unknown
+      response: Response
     ) => void | Promise<void>
   }
 }
@@ -71,12 +71,16 @@ async function capture(settled: Promise<unknown>): Promise<unknown> {
   return undefined
 }
 
-// A single observed failure opens the circuit, and the opener is reported as a
-// `CircuitOpenError` constructed by the plugin bundle.
+// A single dependency failure opens the circuit, and the opener is reported as
+// a `CircuitOpenError` constructed by the plugin bundle. The failure is a
+// response rather than an error because only the signals the plugin classifies
+// as the dependency's own count, and a plugin is told which of the two it is
+// through `ctx.metadata.provenance`; the status alone is enough for a response.
 function openCircuit(circuit: CircuitPluginModule): Promise<unknown> {
   const plugin = circuit.circuitPlugin({ threshold: 1, reset: 60_000 })
   const ctx = pluginContext('https://example.com/circuit')
-  return capture(Promise.resolve(plugin.onError?.(ctx, new Error('boom'))))
+  const failure = new Response(null, { status: 503 })
+  return capture(Promise.resolve(plugin.onSuccess?.(ctx, failure)))
 }
 
 // The first dispatch occupies the only slot and never settles, so the second
