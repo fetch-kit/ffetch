@@ -23,7 +23,7 @@ Plugins run in a deterministic pipeline with two phases:
 - `wrapDispatch`: wraps request execution (`before` / `after` around `next(ctx)`).
 - `decoratePromise`: runs when the request promise is created, before it is returned to the caller.
 - `onSuccess` / `onError`: runs when the request settles.
-- `onFinally`: always runs after success or error.
+- `onFinally`: always runs after success or error - for every plugin once the request has entered the plugin pipeline, even when another hook fails.
 
 ### Per-request Timeline
 
@@ -37,6 +37,8 @@ For one request, the flow is:
 6. Later, when it settles, run `onSuccess` **or** `onError`.
 7. Run `onFinally`.
 
+A step that throws does not skip the callbacks that have already started: once a request has entered the plugin pipeline, `onError` and `onFinally` reach every plugin. Core `onComplete` reports the failure even when it happens earlier - a `transformRequest` or `before` hook that throws while the request is still being prepared, before the pipeline starts, reaches `onComplete` alone.
+
 ### What Each Hook Is For
 
 - `preRequest`: prepare request context (auth, validation, early abort).
@@ -44,7 +46,7 @@ For one request, the flow is:
 - `wrapDispatch`: control execution around the network call.
 - `decoratePromise`: improve caller ergonomics (for example, add `.json()`).
 - `onSuccess` / `onError`: record outcomes, metrics, and side effects.
-- `onFinally`: cleanup that must always happen.
+- `onFinally`: cleanup that must always happen, including a request that failed after the plugin pipeline started.
 
 ## Plugin Order
 
@@ -306,7 +308,7 @@ const jsonShortcutPlugin: ClientPlugin<
 - Keep plugins side-effect free outside controlled state.
 - Prefer per-request data in `ctx.state` instead of global mutable variables.
 - Use `order` only when needed; document ordering assumptions.
-- Avoid throwing from `onFinally` unless intentional.
+- Avoid throwing from `onFinally` unless intentional. A throw fails an otherwise successful request; on a request that already failed, the original error is kept.
 - Use `as const` plugin tuples for best TypeScript extension inference.
 
 ## App-Level Concerns

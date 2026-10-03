@@ -10,6 +10,7 @@ import {
   TimeoutError,
 } from '../../src/error.js'
 import type { Hooks } from '../../src/hooks.js'
+import type { ClientPlugin } from '../../src/plugins.js'
 
 const httpStatusArbitrary = fc.constantFrom(200, 204, 400, 404, 429, 500, 503)
 
@@ -57,6 +58,40 @@ describe('core client fuzzing', () => {
         expect(client.pendingRequests).toHaveLength(0)
       }),
       { numRuns: 250 }
+    )
+  })
+  it('settles and cleans up a preparation that is cancelled', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom('abortAll', 'signal'),
+        async (cancellation) => {
+          const controller = new AbortController()
+          let fetches = 0
+          const client = createClient({
+            plugins: [
+              // Never settles: only cancellation can end this request.
+              { name: 'stuck', preRequest: () => new Promise<void>(() => {}) },
+            ],
+            fetchHandler: async () => {
+              fetches++
+              return new Response(null)
+            },
+          })
+
+          const request = client('https://example.com/stuck-prep', {
+            signal: cancellation === 'signal' ? controller.signal : undefined,
+          })
+          if (cancellation === 'abortAll') client.abortAll()
+          else controller.abort()
+
+          await expect(request).rejects.toBeInstanceOf(AbortError)
+          // A cancelled preparation neither reaches the network nor leaves its
+          // entry behind.
+          expect(fetches).toBe(0)
+          expect(client.pendingRequests).toHaveLength(0)
+        }
+      ),
+      { numRuns: 25 }
     )
   })
 
@@ -569,6 +604,53 @@ describe('core client fuzzing', () => {
         }
       ),
       { numRuns: 500 }
+    )
+  })
+
+  it('cleans up requests when generated plugin hooks fail', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.constantFrom('preRequest', 'onSuccess', 'onError', 'onFinally'),
+        fc.boolean(),
+        async (hookName, asynchronous) => {
+          const hookError = new Error(`generated ${hookName} failure`)
+          const events: string[] = []
+          const makePlugin = (name: string): ClientPlugin => {
+            const plugin: ClientPlugin = { name }
+            Object.assign(plugin, {
+              [hookName]: async () => {
+                events.push(`${name}.${hookName}`)
+                if (asynchronous) await Promise.resolve()
+                throw hookError
+              },
+            })
+            return plugin
+          }
+
+          const client = createClient({
+            plugins: [makePlugin('a'), makePlugin('b')],
+            fetchHandler: async () => {
+              // `onError` only runs once the request has failed.
+              if (hookName === 'onError') throw new Error('transport failure')
+              return new Response(null)
+            },
+          })
+
+          const result = await Promise.allSettled([
+            client(`https://example.com/plugin-hook-failure/${hookName}`),
+          ])
+          await Promise.resolve()
+
+          expect(result).toHaveLength(1)
+          expect(client.pendingRequests).toHaveLength(0)
+          expect(events[0]).toBe(`a.${hookName}`)
+          if (hookName === 'onError' || hookName === 'onFinally') {
+            // These callbacks reach every plugin, even when one of them throws.
+            expect(events).toEqual([`a.${hookName}`, `b.${hookName}`])
+          }
+        }
+      ),
+      { numRuns: 200 }
     )
   })
 })
