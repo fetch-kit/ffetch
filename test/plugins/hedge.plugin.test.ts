@@ -693,6 +693,41 @@ describe('hedgePlugin onHedge errors', () => {
     await resultP.catch(() => {})
   })
 
+  it('rejects when the hedge response is already fulfilled and onHedge rejects', async () => {
+    vi.useFakeTimers()
+
+    const signals: AbortSignal[] = []
+    const d1 = defer<Response>()
+    const onHedge = vi.fn(async () => {
+      throw new Error('immediate callback failure')
+    })
+    let calls = 0
+
+    const next: PluginDispatch = async (ctx) => {
+      calls++
+      signals.push(ctx.request.signal)
+      // Already fulfilled when the hedge timer fires, so its watcher would
+      // settle the race before the callback rejection is delivered.
+      return calls === 1 ? d1.promise : new Response('hedge')
+    }
+
+    const dispatch = hedgePlugin({ delay: 50, maxHedges: 1, onHedge })
+      .wrapDispatch!(next)
+    const resultP = dispatch(makeCtx())
+    const rejection = expect(resultP).rejects.toThrow(
+      'immediate callback failure'
+    )
+
+    await vi.advanceTimersByTimeAsync(60)
+    await rejection
+
+    expect(signals[0].aborted).toBe(true)
+    expect(signals[1].aborted).toBe(true)
+
+    d1.resolve(new Response('slow'))
+    await resultP.catch(() => {})
+  })
+
   it('rejects the request when onHedge throws synchronously', async () => {
     vi.useFakeTimers()
 

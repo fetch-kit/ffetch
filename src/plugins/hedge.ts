@@ -153,11 +153,14 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
           const t = setTimeout(() => {
             launched++
             launch()
-            // Watch the attempt before firing onHedge: a callback error aborts
-            // every attempt, and an aborted attempt must never reject without
-            // a handler attached.
-            watchAttempt(hedgeIndex)
+            // Fire onHedge before watching the attempt: when the hedge response
+            // is already fulfilled, its watcher would otherwise settle the race
+            // in the next microtask and swallow a callback rejection that is
+            // already known. fireOnHedge catches synchronous errors, and the
+            // watcher is still attached in this same turn, so an attempt
+            // aborted by failOnHedgeError never rejects without a handler.
             fireOnHedge(hedgeIndex)
+            watchAttempt(hedgeIndex)
           }, delayMs * hedgeIndex)
           timers.push(t)
         }
