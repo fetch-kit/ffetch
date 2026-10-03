@@ -54,7 +54,7 @@ describe('client hooks and error handling', () => {
     expect(abortCalled).toBe(true)
   })
 
-  it('returns last response if error occurs after response', async () => {
+  it('propagates a transformResponse failure instead of returning the response', async () => {
     global.fetch = vi.fn().mockImplementation(async () => {
       return new Response('ok', { status: 200 })
     })
@@ -66,9 +66,9 @@ describe('client hooks and error handling', () => {
         },
       },
     })
-    const res = await client('http://last-response')
-    expect(res.status).toBe(200)
-    expect(await res.text()).toBe('ok')
+    await expect(client('http://last-response')).rejects.toThrow(
+      'fail after response'
+    )
   })
 })
 

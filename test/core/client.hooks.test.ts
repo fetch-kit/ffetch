@@ -252,6 +252,36 @@ describe('Hooks', () => {
     expect(body).toBe('original-transformed')
   })
 
+  it('propagates a throwing transformResponse instead of the original response', async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response('fail', { status: 500 }))
+    const f = createClient({
+      hooks: {
+        transformResponse: async () => {
+          throw new Error('transform failed')
+        },
+      },
+    })
+    await expect(f('https://example.com/transform-throw')).rejects.toThrow(
+      'transform failed'
+    )
+  })
+
+  it('propagates a throwing after hook instead of the original response', async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response('ok'))
+    const f = createClient({
+      hooks: {
+        after: async () => {
+          throw new Error('after failed')
+        },
+      },
+    })
+    await expect(f('https://example.com/after-throw')).rejects.toThrow(
+      'after failed'
+    )
+  })
+
   it('transformRequest signal is properly combined with other signals', async () => {
     // Create controllers for user signal and transformRequest signal
     const userController = new AbortController()

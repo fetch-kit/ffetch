@@ -95,6 +95,10 @@ const client = createClient({
 })
 ```
 
+> **Note:** If `transformResponse` throws, the error propagates to the caller and the
+> original response is **not** returned. The same applies to `after`. Wrap the body of
+> the hook in `try`/`catch` if you want to fall back to the untransformed response.
+
 ## Common Use Cases
 
 ### 1. Authentication

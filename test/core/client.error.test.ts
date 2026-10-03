@@ -335,6 +335,53 @@ describe('Advanced/Edge Cases: Custom Errors', () => {
     expect(res.status).toBe(500)
   })
 
+  it('NetworkError: thrown when a retry fails after an earlier response', async () => {
+    let calls = 0
+    const onError = vi.fn()
+    const onComplete = vi.fn()
+    global.fetch = vi.fn().mockImplementation(async () => {
+      calls++
+      if (calls === 1) return new Response('server down', { status: 503 })
+      throw new TypeError('network error')
+    })
+    const f = createClient({
+      retries: 1,
+      retryDelay: 0,
+      hooks: { onError, onComplete },
+    })
+    await expect(f('https://example.com/retry-then-network')).rejects.toThrow(
+      NetworkError
+    )
+    expect(calls).toBe(2)
+    expect(onError).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.any(NetworkError)
+    )
+    expect(onComplete).toHaveBeenCalledWith(
+      expect.any(Request),
+      undefined,
+      expect.any(NetworkError)
+    )
+  })
+
+  it('NetworkError: not replaced by HttpError when throwOnHttpError is true', async () => {
+    let calls = 0
+    global.fetch = vi.fn().mockImplementation(async () => {
+      calls++
+      if (calls === 1) return new Response('server down', { status: 503 })
+      throw new TypeError('network error')
+    })
+    const f = createClient({
+      throwOnHttpError: true,
+      retries: 1,
+      retryDelay: 0,
+    })
+    await expect(f('https://example.com/retry-then-network')).rejects.toThrow(
+      NetworkError
+    )
+    expect(calls).toBe(2)
+  })
+
   it('RetryLimitError: wraps last error message', async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('something bad'))
     const f = createClient({ retries: 1 })
