@@ -72,11 +72,27 @@ export type PluginRetryMetadata = {
   lastResponse?: Response
 }
 
+/**
+ * Who raised the error the lifecycle hooks are being told about. `attempt`
+ * means the request's own attempt raised it, so it is evidence about the
+ * dependency. `hook` means local code did - a plugin refusing the request, a
+ * retry policy that threw, a response hook that failed - so it is not.
+ */
+export type PluginProvenance = 'attempt' | 'hook'
+
 export type PluginRequestMetadata = {
   startedAt: number
   timeoutMs: number
   signals: PluginSignalMetadata
   retry: PluginRetryMetadata
+  /**
+   * Who raised the error `onError` is being told about, kept up to date while
+   * the request runs. It is `attempt` only for an error the request's own
+   * attempt raised; everything else is `hook`, including a request that has not
+   * reached an attempt yet. A context built by hand can leave it out, and any
+   * value other than `attempt` has to be read as local code.
+   */
+  provenance?: PluginProvenance
 }
 
 export type PluginRequestContext = {

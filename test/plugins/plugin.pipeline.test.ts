@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { createClient } from '../../src/client.js'
 import type { ClientPlugin } from '../../src/plugins.js'
-import { RetryLimitError } from '../../src/error.js'
+import { NetworkError, RetryLimitError } from '../../src/error.js'
 
 describe('plugin pipeline', () => {
   it('runs lifecycle hooks in sorted plugin order on success', async () => {
@@ -390,5 +390,71 @@ describe('plugin pipeline', () => {
       'b.attempt.3',
       'a.attempt.3',
     ])
+  })
+})
+
+describe('error provenance', () => {
+  // Records `ctx.metadata.provenance` as each failure is reported, so a plugin
+  // can tell whether an error describes the dependency or local code.
+  const recorder = (seen: string[]): ClientPlugin => ({
+    name: 'recorder',
+    onError: (ctx) => {
+      seen.push(ctx.metadata.provenance ?? 'none')
+    },
+  })
+
+  it('reports a failure the attempt itself raised as the attempt', async () => {
+    const seen: string[] = []
+    const client = createClient({
+      retries: 0,
+      plugins: [recorder(seen)],
+      fetchHandler: async () => {
+        throw new TypeError('fetch failed')
+      },
+    })
+
+    await expect(
+      client('https://example.com/attempt-failure')
+    ).rejects.toBeInstanceOf(NetworkError)
+    expect(seen).toEqual(['attempt'])
+  })
+
+  it('reports a failure a response hook raised as local code', async () => {
+    const seen: string[] = []
+    const client = createClient({
+      retries: 0,
+      plugins: [recorder(seen)],
+      hooks: {
+        transformResponse: () => {
+          throw new Error('transform failed')
+        },
+      },
+      fetchHandler: async () => new Response('ok'),
+    })
+
+    await expect(client('https://example.com/hook-failure')).rejects.toThrow(
+      'transform failed'
+    )
+    expect(seen).toEqual(['hook'])
+  })
+
+  it('reports a request refused before any attempt as local code', async () => {
+    const seen: string[] = []
+    const refuser: ClientPlugin = {
+      name: 'refuser',
+      beforeAttempt: () => {
+        throw new Error('refused')
+      },
+    }
+    const client = createClient({
+      retries: 0,
+      plugins: [recorder(seen), refuser],
+      fetchHandler: async () => new Response('ok'),
+    })
+
+    await expect(client('https://example.com/refused')).rejects.toThrow(
+      'refused'
+    )
+    expect(seen).toEqual(['hook'])
   })
 })

@@ -22,7 +22,7 @@ Plugins run in a deterministic pipeline with two phases:
 - `beforeAttempt`: runs immediately before each physical fetch attempt (initial, retry, and hedged). Use it to stamp per-attempt metadata such as trace spans. Throwing from it refuses the attempt: the request is not sent, and the error reaches the caller exactly as the hook raised it.
 - `wrapDispatch`: wraps request execution (`before` / `after` around `next(ctx)`).
 - `decoratePromise`: runs when the request promise is created, before it is returned to the caller.
-- `onSuccess` / `onError`: runs when the request settles.
+- `onSuccess` / `onError`: runs when the request settles. An `onError` hook can read `ctx.metadata.provenance` to tell whether the error came from the request's own attempt or from local code.
 - `onFinally`: always runs after success or error - for every plugin once the request has entered the plugin pipeline, even when another hook fails.
 
 ### Per-request Timeline
@@ -45,7 +45,7 @@ A step that throws does not skip the callbacks that have already started: once a
 - `beforeAttempt`: stamp per-attempt metadata (for example, trace spans) right before each physical fetch, or refuse the attempt by throwing.
 - `wrapDispatch`: control execution around the network call.
 - `decoratePromise`: improve caller ergonomics (for example, add `.json()`).
-- `onSuccess` / `onError`: record outcomes, metrics, and side effects.
+- `onSuccess` / `onError`: record outcomes, metrics, and side effects. An `onError` hook that treats a failure as evidence about the dependency should check `ctx.metadata.provenance` first: the error type says what was raised, not who raised it.
 - `onFinally`: cleanup that must always happen, including a request that failed after the plugin pipeline started.
 
 ## Plugin Order
@@ -244,6 +244,7 @@ import type {
   PluginRequestContext,
   PluginDispatch,
   PluginSetupContext,
+  PluginProvenance,
 } from '@fetchkit/ffetch'
 ```
 
@@ -253,6 +254,7 @@ What you can access in request context:
 - `ctx.init`: request init/options.
 - `ctx.state`: per-request mutable plugin state.
 - `ctx.metadata`: signal and retry metadata.
+- `ctx.metadata.provenance`: who raised the error `onError` is being told about, as a `PluginProvenance`. It is `'attempt'` for an error the request's own attempt raised, and `'hook'` for local code - a plugin refusing the request, a retry policy that threw, a response hook that failed - including a request that has not reached an attempt yet.
 
 ## Wrapping Dispatch
 

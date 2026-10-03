@@ -74,6 +74,7 @@ The error classes are shared between the root entrypoint and the plugin subpaths
 - If a `transformResponse` or `after` hook throws, that error propagates to the caller unchanged. The original response is **not** returned and no HTTP fallback is applied.
 - Errors thrown by other core hooks follow the same rule: they are never converted into `HttpError`, `NetworkError`, or `RetryLimitError`.
 - A hook a plugin provides is treated the same way. A plugin that refuses a request by throwing (`preRequest`, `beforeAttempt`, or `wrapDispatch`) sends its own error to the caller, and only an attempt that actually failed becomes a `RetryLimitError`. Whether a refusal is attempted again is the retry policy's decision, not the core's.
+- The core tracks which stage raised the error it reports and publishes it as `ctx.metadata.provenance`, so a plugin can tell the attempt's own failure from local code without reading the error's type. An error a hook throws is reported as local code even when it is one of the core error types.
 
 ### 8. Native Rejection Shapes
 

@@ -6,6 +6,7 @@ import {
   BulkheadFullError,
   CircuitOpenError,
   HttpError,
+  NetworkError,
   TimeoutError,
 } from '../../src/error.js'
 import { bulkheadPlugin } from '../../src/plugins/bulkhead.js'
@@ -390,6 +391,89 @@ describe('circuit plugin failure classification', () => {
     ).resolves.toMatchObject({ status: 200 })
     expect(client.circuitOpen).toBe(false)
     expect(fetchHandler).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not count a hook that throws a dependency error type', async () => {
+    // The error type says what the hook decided to report, not what the
+    // dependency did. The core marks the error as raised outside the attempt, so
+    // it is not evidence about the dependency even when it is typed as one.
+    let calls = 0
+    const fetchHandler = vi.fn(async () => new Response('ok', { status: 200 }))
+    const client = createClient({
+      retries: 0,
+      plugins: [circuitPlugin({ threshold: 1, reset: 1_000 })],
+      hooks: {
+        transformResponse: (res) => {
+          if (++calls === 1) {
+            throw new HttpError(
+              'upstream looks down',
+              new Response(null, { status: 503 })
+            )
+          }
+          return res
+        },
+      },
+      fetchHandler,
+    })
+
+    await expect(
+      client('https://example.com/typed-hook-error')
+    ).rejects.toBeInstanceOf(HttpError)
+    expect(client.circuitOpen).toBe(false)
+
+    await expect(
+      client('https://example.com/after-typed-hook-error')
+    ).resolves.toMatchObject({ status: 200 })
+    expect(client.circuitOpen).toBe(false)
+    expect(calls).toBe(2)
+  })
+
+  it('does not count a refusal that uses a dependency error type', async () => {
+    // Refusing an attempt is local code, and a plugin is free to use one of the
+    // core error types to do it. That is not the attempt timing out.
+    const fetchHandler = vi.fn(async () => new Response('ok', { status: 200 }))
+    const client = createClient({
+      retries: 0,
+      plugins: [
+        {
+          name: 'refuser',
+          beforeAttempt: () => {
+            throw new TimeoutError('refused locally')
+          },
+        },
+        circuitPlugin({ threshold: 1, reset: 1_000 }),
+      ],
+      fetchHandler,
+    })
+
+    await expect(
+      client('https://example.com/typed-refusal')
+    ).rejects.toBeInstanceOf(TimeoutError)
+    expect(client.circuitOpen).toBe(false)
+    expect(fetchHandler).not.toHaveBeenCalled()
+  })
+
+  it('does not count a dependency error type raised by a retry policy', async () => {
+    // The policy runs between attempts, so an error it raises is its own - not
+    // the attempt reporting a network failure.
+    const fetchHandler = vi.fn(async () => {
+      throw new TypeError('fetch failed')
+    })
+    const client = createClient({
+      retries: 1,
+      retryDelay: 0,
+      plugins: [circuitPlugin({ threshold: 1, reset: 1_000 })],
+      shouldRetry: () => {
+        throw new NetworkError('the policy gave up')
+      },
+      fetchHandler,
+    })
+
+    await expect(
+      client('https://example.com/typed-policy-error')
+    ).rejects.toBeInstanceOf(NetworkError)
+    expect(client.circuitOpen).toBe(false)
+    expect(fetchHandler).toHaveBeenCalledTimes(1)
   })
 
   it('counts a timeout as a dependency failure', async () => {

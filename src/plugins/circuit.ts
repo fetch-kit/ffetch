@@ -72,15 +72,17 @@ export function circuitPlugin(
   /**
    * Classifies one observation the pipeline reports. Only the dependency's own
    * failures count: a 5xx or 429, or a `NetworkError`, a `TimeoutError` or a
-   * `RetryLimitError` thrown for the attempt. A 4xx is not a failure - including
+   * `RetryLimitError` the attempt raised. A 4xx is not a failure - including
    * when `throwOnHttpError` surfaces it as an `HttpError`, because that option
    * changes how a response reaches the pipeline, not which statuses describe a
    * broken dependency - and it resets the count the way a success does.
    *
-   * Everything else reports `undefined` and is ignored by omission, so a local
-   * admission refusal (`BulkheadFullError`), a cancellation (`AbortError`), the
-   * circuit's own `CircuitOpenError`, and errors thrown by hooks or plugins are
-   * never treated as evidence about the dependency.
+   * Everything else reports `undefined` and is ignored by omission, so an error
+   * of any other type - a local admission refusal (`BulkheadFullError`), a
+   * cancellation (`AbortError`), a raw rejection from a custom `fetchHandler` -
+   * is never treated as evidence about the dependency. Whether an error came
+   * from the attempt at all is the core's answer, read from
+   * `ctx.metadata.provenance`, rather than something this function infers.
    */
   const classify = (
     response?: Response,
@@ -198,7 +200,12 @@ export function circuitPlugin(
       await observe(ctx.request, classify(response, undefined), { response })
     },
     onError: async (ctx, error) => {
-      if (error instanceof CircuitOpenError) {
+      // Only an error the attempt itself raised says anything about the
+      // dependency. Local code is reported as `hook` however its error is
+      // typed - a plugin refusing the request, a hook that throws, another
+      // plugin's reporting hook, and this circuit's own refusal - so an error
+      // type is never read as evidence about the dependency.
+      if (ctx.metadata.provenance !== 'attempt') {
         return
       }
       await observe(ctx.request, classify(undefined, error), { error })

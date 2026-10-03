@@ -11,6 +11,7 @@ import {
   type PluginRequestContext,
   type PluginExtensions,
   type PluginRequestPromiseExtensions,
+  type PluginProvenance,
   type ClientPlugin,
   type PluginExtensionBase,
   type PluginRequestPromiseExtensionBase,
@@ -410,6 +411,8 @@ export function createClient<
               configuredDelay: effectiveRetryDelay,
               attempt: 0,
             },
+            // Nothing has reached the dependency yet.
+            provenance: 'hook',
           },
         }
         pluginContext = requestContext
@@ -475,6 +478,31 @@ export function createClient<
           const attemptBody =
             dispatchCtx.request === request ? replayableBody : null
           let attempt = 0
+
+          // Who raised the error the request is propagating. The core marks the
+          // errors it raises for the attempt, and marks the call sites where a
+          // hook can raise one instead, so an error thrown by local code is
+          // never mistaken for the attempt failing - not even when a hook throws
+          // the attempt's own error onward, which identity cannot tell apart.
+          let attemptRaisedError = false
+          const markProvenance = (source: PluginProvenance) => {
+            attemptRaisedError = source === 'attempt'
+            dispatchCtx.metadata.provenance = source
+          }
+          markProvenance('hook')
+
+          /**
+           * Runs local code - a hook, or a retry policy - and marks whatever it
+           * throws as local code's error rather than the attempt's.
+           */
+          const asLocal = async <T>(run: () => T | Promise<T>): Promise<T> => {
+            try {
+              return await run()
+            } catch (err) {
+              markProvenance('hook')
+              throw err
+            }
+          }
           const shouldRetryWithHook = async (
             ctx: import('./types').RetryContext
           ) => {
@@ -482,14 +510,19 @@ export function createClient<
             dispatchCtx.metadata.retry.attempt = attempt
             dispatchCtx.metadata.retry.lastError = ctx.error
             dispatchCtx.metadata.retry.lastResponse = ctx.response
-            const retrying = effectiveShouldRetry(ctx)
+            // Deciding on a retry is local code's job, so an error raised here
+            // is local code's - even when a policy throws the attempt's own
+            // error on with `throw ctx.error`.
+            const retrying = await asLocal(() => effectiveShouldRetry(ctx))
             dispatchCtx.metadata.retry.shouldRetryResult = retrying
             if (retrying && attempt <= effectiveRetries) {
-              await effectiveHooks.onRetry?.(
-                requestForAttempt,
-                attempt - 1,
-                ctx.error,
-                ctx.response
+              await asLocal(() =>
+                effectiveHooks.onRetry?.(
+                  requestForAttempt,
+                  attempt - 1,
+                  ctx.error,
+                  ctx.response
+                )
               )
             }
             if (retrying) {
@@ -501,15 +534,15 @@ export function createClient<
             return retrying
           }
 
-          // The error the attempt itself failed with, when that is what leaves
-          // the retry loop. It is the only error a `RetryLimitError` describes;
-          // an error raised while the request was being prepared for an attempt
-          // belongs to whoever raised it.
-          let attemptFailure: unknown
           let res: Response
           try {
             res = await retry(
               async (attempt) => {
+                // Everything the attempt raises is the attempt's own outcome:
+                // the signals it is dispatched with, the request built for it,
+                // and whatever the handler rejects with. Only the hook calls
+                // below are local code.
+                markProvenance('attempt')
                 if (controller.signal.aborted) {
                   throw new AbortError('Request was aborted')
                 }
@@ -536,7 +569,9 @@ export function createClient<
                 // before the attempt is built, so it is not a failed attempt:
                 // the plugin's error is the answer the request gets.
                 for (const plugin of plugins) {
-                  await plugin.beforeAttempt?.(dispatchCtx, attempt)
+                  await asLocal(() =>
+                    plugin.beforeAttempt?.(dispatchCtx, attempt)
+                  )
                 }
                 try {
                   const reqWithSignal =
@@ -555,8 +590,8 @@ export function createClient<
                 } catch (err) {
                   dispatchCtx.metadata.retry.lastError = err
                   // Building the request for the attempt counts as part of it:
-                  // either way this is the error the attempt failed with.
-                  attemptFailure = err
+                  // either way this is the error the attempt failed with, which
+                  // the provenance marker already records.
                   // Cancellation is read from the signals rather than from the
                   // rejection value: `fetch` rejects with the abort reason of the
                   // signal it was given, which is a `DOMException` named
@@ -622,12 +657,11 @@ export function createClient<
               }
               throw err
             }
-            // Any other error was raised while the request was being prepared
-            // for an attempt rather than by an attempt failing: a plugin
-            // refusing it in `beforeAttempt`, or a retry hook that throws. The
-            // raiser's error is the answer the request gets - re-labelling it
-            // as a `RetryLimitError` would report the dependency as the reason.
-            if (err !== attemptFailure) throw err
+            // An error the attempt did not raise - a plugin refusing the
+            // request, a retry policy or hook that threw - reaches the caller
+            // as it was raised. Re-labelling it as a `RetryLimitError` would
+            // make the dependency the reason for a decision it never made.
+            if (!attemptRaisedError) throw err
             const retryErr = new RetryLimitError(
               typeof err === 'object' &&
                 err &&
@@ -643,10 +677,15 @@ export function createClient<
             throw retryErr
           }
 
-          if (effectiveHooks.transformResponse) {
-            res = await effectiveHooks.transformResponse(res, requestForAttempt)
+          const transformResponse = effectiveHooks.transformResponse
+          if (transformResponse) {
+            // Rewriting the response is local code, so an error thrown while it
+            // runs is not the attempt failing.
+            res = await asLocal(() => transformResponse(res, requestForAttempt))
           }
-          await effectiveHooks.after?.(requestForAttempt, res)
+          await asLocal(() => effectiveHooks.after?.(requestForAttempt, res))
+          // The status is read from the response the attempt produced, so this
+          // error keeps the provenance the attempt set.
           if (effectiveThrowOnHttpError && isHttpErrorStatus(res.status)) {
             const { HttpError } = await import('./error.js')
             throw new HttpError(
@@ -682,11 +721,19 @@ export function createClient<
         .then((dispatch) => dispatch())
         .finally(stopWatching)
         .then(async (response) => {
-          await callComplete(response, undefined)
-          // A response can only come out of the pipeline, so the context that
-          // describes the request is set by the time this runs.
-          for (const plugin of plugins) {
-            await plugin.onSuccess?.(pluginContext!, response)
+          try {
+            await callComplete(response, undefined)
+            // A response can only come out of the pipeline, so the context that
+            // describes the request is set by the time this runs.
+            for (const plugin of plugins) {
+              await plugin.onSuccess?.(pluginContext!, response)
+            }
+          } catch (err) {
+            // Reporting the response is local code too, so a plugin that fails
+            // while being told about it is not evidence about the dependency
+            // when the other plugins hear about that failure.
+            if (pluginContext) pluginContext.metadata.provenance = 'hook'
+            throw err
           }
           return response
         })

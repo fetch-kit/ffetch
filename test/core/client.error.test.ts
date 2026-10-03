@@ -683,6 +683,45 @@ describe('Native fetch rejection shapes', () => {
     await expect(f('https://example.com')).rejects.toBe(hookFailure)
   })
 
+  it('keeps a retry hook error that is the attempt error object itself', async () => {
+    // `throw ctx.error` hands the attempt's own error onward, so the object
+    // cannot say which stage raised it. The stage decides, and the hook is the
+    // stage that failed, so its error is still not a `RetryLimitError`.
+    const attemptFailure = new Error('attempt failed')
+    global.fetch = vi.fn().mockRejectedValue(attemptFailure)
+    const f = createClient({
+      retries: 2,
+      retryDelay: 0,
+      shouldRetry: (ctx) => {
+        throw ctx.error
+      },
+    })
+
+    const caught = await f('https://example.com').catch((error) => error)
+    expect(caught).toBe(attemptFailure)
+    expect(caught).not.toBeInstanceOf(RetryLimitError)
+  })
+
+  it('keeps an onRetry error that is the attempt error object itself', async () => {
+    // The same holds for a hook that runs after the decision: rethrowing the
+    // attempt's error does not turn the hook into the attempt.
+    const attemptFailure = new Error('attempt failed')
+    global.fetch = vi.fn().mockRejectedValue(attemptFailure)
+    const f = createClient({
+      retries: 1,
+      retryDelay: 0,
+      hooks: {
+        onRetry: (_request, _attempt, error) => {
+          throw error
+        },
+      },
+    })
+
+    const caught = await f('https://example.com').catch((error) => error)
+    expect(caught).toBe(attemptFailure)
+    expect(caught).not.toBeInstanceOf(RetryLimitError)
+  })
+
   it('classifies a TimeoutError-shaped DOMException even without an aborted signal', async () => {
     global.fetch = vi
       .fn()
