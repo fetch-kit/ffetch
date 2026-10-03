@@ -22,6 +22,7 @@ See also:
 | Timeout (request times out)        |         throws         |         throws          | Throws TimeoutError                 |
 | Aborted by user                    |         throws         |         throws          | Throws AbortError                   |
 | Retry limit reached (other errors) |         throws         |         throws          | Throws RetryLimitError              |
+| `transformResponse`/`after` throws |         throws         |         throws          | Throws the hook's error             |
 
 ## Error Identity Across Entrypoints
 
@@ -40,7 +41,7 @@ The error classes are shared between the root entrypoint and the plugin subpaths
 ### 2. Network Errors
 
 - If a network error (e.g., lost connection, DNS failure) occurs and all retries are exhausted, the client **throws a `NetworkError`**.
-- This happens regardless of the `throwOnHttpError` flag.
+- This happens regardless of the `throwOnHttpError` flag, and even when an earlier attempt returned a response (for example a retried `503`). The earlier response is discarded and its body is cancelled; it is not returned as a fallback.
 
 ### 3. Circuit Breaker
 
@@ -61,6 +62,11 @@ The error classes are shared between the root entrypoint and the plugin subpaths
 
 - If all retries are exhausted and the error is not one of the above, the client **throws a `RetryLimitError`**.
 - This happens regardless of the `throwOnHttpError` flag.
+
+### 7. Hook Errors
+
+- If a `transformResponse` or `after` hook throws, that error propagates to the caller unchanged. The original response is **not** returned and no HTTP fallback is applied.
+- Errors thrown by other core hooks follow the same rule: they are never converted into `HttpError`, `NetworkError`, or `RetryLimitError`.
 
 ## Examples
 
@@ -89,3 +95,4 @@ await client('https://example.com', { signal: controller.signal }) // throws Abo
 - The `throwOnHttpError` flag can be set globally (on the client) or per-request (in the `init` object). Per-request always takes precedence.
 - Only the final response after all retries is considered for throwing `HttpError`.
 - All other error types (timeout, abort, network, circuit, retry limit) are always thrown as errors, regardless of the flag.
+- The last response of a retry chain is never returned as a fallback: if the final attempt fails with a transport error, that error is thrown even when earlier attempts produced a response.

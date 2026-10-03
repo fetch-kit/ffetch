@@ -76,6 +76,17 @@ async function captureReplayableBody(
   }
 }
 
+/**
+ * HTTP statuses that `throwOnHttpError` turns into an `HttpError`.
+ */
+function isHttpErrorStatus(status: number): boolean {
+  return (
+    (status >= 400 && status < 500 && status !== 429) ||
+    status >= 500 ||
+    status === 429
+  )
+}
+
 export function createClient<
   TPlugins extends readonly ClientPlugin<
     PluginExtensionBase,
@@ -317,9 +328,9 @@ export function createClient<
           return retrying
         }
 
-        let lastResponse: Response | undefined = undefined
+        let res: Response
         try {
-          let res = await retry(
+          res = await retry(
             async (attempt) => {
               if (controller.signal.aborted) {
                 throw new AbortError('Request was aborted')
@@ -357,7 +368,6 @@ export function createClient<
               try {
                 const handler = init.fetchHandler ?? fetchHandler ?? fetch
                 const response = await handler(reqWithSignal)
-                lastResponse = response
                 dispatchCtx.metadata.retry.lastResponse = response
                 return response
               } catch (err) {
@@ -395,23 +405,6 @@ export function createClient<
             requestForAttempt,
             dispatchSignal
           )
-          if (effectiveHooks.transformResponse) {
-            res = await effectiveHooks.transformResponse(res, requestForAttempt)
-          }
-          await effectiveHooks.after?.(requestForAttempt, res)
-          if (
-            effectiveThrowOnHttpError &&
-            ((res.status >= 400 && res.status < 500 && res.status !== 429) ||
-              res.status >= 500 ||
-              res.status === 429)
-          ) {
-            const { HttpError } = await import('./error.js')
-            throw new HttpError(
-              `HTTP error: ${res.status} ${res.statusText}`,
-              res
-            )
-          }
-          return res
         } catch (err: unknown) {
           dispatchCtx.metadata.retry.lastError = err
           if (err instanceof TimeoutError) {
@@ -425,24 +418,6 @@ export function createClient<
               await reportCoreError(err, requestForAttempt)
             }
             throw err
-          }
-          if (lastResponse) {
-            const resp = lastResponse as Response
-            if (
-              effectiveThrowOnHttpError &&
-              ((resp.status >= 400 &&
-                resp.status < 500 &&
-                resp.status !== 429) ||
-                resp.status >= 500 ||
-                resp.status === 429)
-            ) {
-              const { HttpError } = await import('./error.js')
-              throw new HttpError(
-                `HTTP error: ${resp.status} ${resp.statusText}`,
-                resp
-              )
-            }
-            return resp
           }
           if (err instanceof NetworkError) {
             if (dispatchCtx === pluginContext) {
@@ -464,6 +439,19 @@ export function createClient<
           }
           throw retryErr
         }
+
+        if (effectiveHooks.transformResponse) {
+          res = await effectiveHooks.transformResponse(res, requestForAttempt)
+        }
+        await effectiveHooks.after?.(requestForAttempt, res)
+        if (effectiveThrowOnHttpError && isHttpErrorStatus(res.status)) {
+          const { HttpError } = await import('./error.js')
+          throw new HttpError(
+            `HTTP error: ${res.status} ${res.statusText}`,
+            res
+          )
+        }
+        return res
       }
 
       const baseDispatch: PluginDispatch = async (ctx) => {
