@@ -317,4 +317,59 @@ describe('hedge policy fuzzing', () => {
       { numRuns: 500 }
     )
   })
+
+  it('never aborts the attempt whose response it returns', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.integer({ min: 0, max: 20 }), {
+          minLength: 1,
+          maxLength: 5,
+        }),
+        async (delays) => {
+          vi.useFakeTimers()
+
+          const signals: AbortSignal[] = []
+          let calls = 0
+          const next: PluginDispatch = (ctx) => {
+            const attempt = calls++
+            signals.push(ctx.request.signal)
+            return new Promise((resolve) => {
+              setTimeout(
+                () =>
+                  resolve(
+                    new Response(null, {
+                      status: 503,
+                      headers: { 'x-attempt': String(attempt) },
+                    })
+                  ),
+                delays[attempt]
+              )
+            })
+          }
+          const dispatch = hedgePlugin({
+            delay: 1,
+            maxHedges: delays.length - 1,
+          }).wrapDispatch!(next)
+
+          const resultPromise = dispatch(makeContext())
+          await vi.runAllTimersAsync()
+          const result = await resultPromise
+
+          const attemptHeader = result.headers.get('x-attempt')
+          expect(attemptHeader).not.toBeNull()
+          const winner = Number(attemptHeader)
+
+          expect(result.status).toBe(503)
+          expect(signals[winner].aborted).toBe(false)
+          signals.forEach((signal, index) => {
+            if (index !== winner) expect(signal.aborted).toBe(true)
+          })
+          expect(calls).toBe(delays.length)
+
+          vi.useRealTimers()
+        }
+      ),
+      { numRuns: 500 }
+    )
+  })
 })

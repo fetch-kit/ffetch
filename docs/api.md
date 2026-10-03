@@ -177,7 +177,7 @@ Notes:
 
 - Hedge races multiple attempts and returns the first _acceptable_ response (ok status, or 4xx except 429). If all attempts settle without a clear winner, the last remaining attempt wins regardless of status.
 - 5xx and 429 responses are not winners; hedge will wait for other attempts.
-- Loser attempts are cancelled (via `AbortController`) to prevent wasted bandwidth.
+- Loser attempts are cancelled (via `AbortController`) to prevent wasted bandwidth. The returned response is never cancelled: the attempt that produced it keeps its signal, so the body stays readable - including when the returned response is a non-winning fallback such as a 5xx.
 - Hedge and retries are _alternative_ strategies; combining them multiplies traffic. Use retries or hedge, not both, unless you carefully quantify the cost.
 - Hedge is ordered at `15` (between dedupe at `10` and circuit at `20`). Dedupe collapses callers before hedge races them.
 

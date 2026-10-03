@@ -58,6 +58,7 @@ const client = createClient({
 - Hedging is off unless the plugin is installed.
 - **Winner policy**: First response that is not 5xx and not 429 becomes the winner. If all attempts settle without a winner, the last remaining attempt wins regardless of status.
 - **Losers are cancelled**: When a winner is found, all other in-flight attempts are aborted via `AbortController` to prevent wasted bandwidth.
+- **The returned response is never cancelled**: the attempt that produced the response handed back to the caller keeps its signal, so its body stays readable. This also holds for a non-winning fallback - a 5xx or 429 returned because every attempt settled without a winner - where the fallback's own attempt stays alive and only the other attempts are aborted.
 - **5xx and 429 are non-winners**: Hedge will wait for other attempts even if they arrive later.
 - **4xx responses win immediately** (except 429).
 - **Hedge vs. retries**: Hedge races parallel attempts; retries retry sequentially. Combining both multiplies traffic — generally prefer one or the other.

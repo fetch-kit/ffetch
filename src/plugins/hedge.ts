@@ -61,6 +61,7 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
         let launched = 1
         let completed = 0
         let fallbackResponse: Response | undefined
+        let fallbackIndex = -1
         let lastError: unknown
         const timers: ReturnType<typeof setTimeout>[] = []
 
@@ -76,7 +77,9 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
 
           const allAttemptsLaunched = launched >= maxHedges + 1
           if (fallbackResponse && allAttemptsLaunched) {
-            settle(attempts.length - 1, fallbackResponse)
+            // The fallback belongs to the attempt that produced it, not to the
+            // last launched one, so only the other attempts are losers.
+            settle(fallbackIndex, fallbackResponse)
             return
           }
 
@@ -100,12 +103,14 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
           if (result.status === 'fulfilled') {
             const res = result.value
             // A retryable response is only a fallback. Its attempt index says
-            // when it was launched, not whether a better attempt is pending.
+            // when it was launched, not whether a better attempt is pending,
+            // so remember which attempt produced it before the race settles.
             if (res.ok || (res.status < 500 && res.status !== 429)) {
               settle(index, res)
               return
             }
             fallbackResponse = res
+            fallbackIndex = index
           } else {
             lastError = result.reason
           }
