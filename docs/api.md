@@ -165,19 +165,20 @@ const data = await client('https://api.example.com/data')
 
 Options:
 
-| Option        | Type                                                       | Default                        | Description                                          |
-| ------------- | ---------------------------------------------------------- | ------------------------------ | ---------------------------------------------------- |
-| `delay`       | `number \| (req: Request) => number`                       | Required                       | Delay (ms) before sending hedge attempt.             |
-| `maxHedges`   | `number`                                                   | `1`                            | Maximum number of hedge attempts.                    |
-| `shouldHedge` | `(req: Request) => boolean`                                | Safe methods (GET, HEAD, etc.) | Function to determine if a request should be hedged. |
-| `onHedge`     | `(req: Request, attempt: number) => void or Promise<void>` | Undefined                      | Callback when a hedge attempt is sent.               |
-| `order`       | `number`                                                   | `15`                           | Plugin execution order.                              |
+| Option        | Type                                                       | Default                        | Description                                                                    |
+| ------------- | ---------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------ |
+| `delay`       | `number \| (req: Request) => number`                       | Required                       | Delay (ms) before sending hedge attempt.                                       |
+| `maxHedges`   | `number`                                                   | `1`                            | Maximum number of hedge attempts.                                              |
+| `shouldHedge` | `(req: Request) => boolean`                                | Safe methods (GET, HEAD, etc.) | Function to determine if a request should be hedged.                           |
+| `onHedge`     | `(req: Request, attempt: number) => void or Promise<void>` | Undefined                      | Callback when a hedge attempt is sent. A throw or rejection fails the request. |
+| `order`       | `number`                                                   | `15`                           | Plugin execution order.                                                        |
 
 Notes:
 
 - Hedge races multiple attempts and returns the first _acceptable_ response (ok status, or 4xx except 429). If all attempts settle without a clear winner, the last remaining attempt wins regardless of status.
 - 5xx and 429 responses are not winners; hedge will wait for other attempts.
 - Loser attempts are cancelled (via `AbortController`) to prevent wasted bandwidth. The returned response is never cancelled: the attempt that produced it keeps its signal, so the body stays readable - including when the returned response is a non-winning fallback such as a 5xx.
+- `onHedge` errors are not swallowed: a synchronous throw or a rejected promise from the callback rejects the request and aborts every in-flight attempt. A rejection that arrives after the race settled is ignored.
 - Hedge and retries are _alternative_ strategies; combining them multiplies traffic. Use retries or hedge, not both, unless you carefully quantify the cost.
 - Hedge is ordered at `15` (between dedupe at `10` and circuit at `20`). Dedupe collapses callers before hedge races them.
 

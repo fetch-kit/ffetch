@@ -50,7 +50,7 @@ const client = createClient({
 - `delay`: Number (ms) or function to determine delay before the first hedge attempt. Required.
 - `maxHedges`: Maximum additional attempts to race (default: `1`).
 - `shouldHedge`: Function to determine if a request should be hedged (default: safe methods only).
-- `onHedge`: Optional callback fired when a hedge attempt is sent.
+- `onHedge`: Optional callback fired when a hedge attempt is sent. A synchronous throw or a rejected promise fails the request and aborts every in-flight attempt.
 - `order`: Plugin execution order override (default: `15`).
 
 ## Behavior Notes
@@ -59,6 +59,7 @@ const client = createClient({
 - **Winner policy**: First response that is not 5xx and not 429 becomes the winner. If all attempts settle without a winner, the last remaining attempt wins regardless of status.
 - **Losers are cancelled**: When a winner is found, all other in-flight attempts are aborted via `AbortController` to prevent wasted bandwidth.
 - **The returned response is never cancelled**: the attempt that produced the response handed back to the caller keeps its signal, so its body stays readable. This also holds for a non-winning fallback - a 5xx or 429 returned because every attempt settled without a winner - where the fallback's own attempt stays alive and only the other attempts are aborted.
+- **`onHedge` errors fail the request**: a synchronous throw or a rejected promise from `onHedge` rejects the request with that error and aborts every in-flight attempt. A rejection that arrives after the race has already settled is ignored - the response has already been handed to the caller.
 - **5xx and 429 are non-winners**: Hedge will wait for other attempts even if they arrive later.
 - **4xx responses win immediately** (except 429).
 - **Hedge vs. retries**: Hedge races parallel attempts; retries retry sequentially. Combining both multiplies traffic — generally prefer one or the other.

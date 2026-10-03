@@ -32,30 +32,6 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
       const controllers: AbortController[] = []
       const attempts: Promise<Response>[] = []
 
-      function launch(attemptIndex: number): void {
-        const controller = new AbortController()
-        controllers.push(controller)
-
-        const parentSignal = ctx.metadata.signals.combined ?? ctx.request.signal
-        const signal = AbortSignal.any([parentSignal, controller.signal])
-
-        const req = new Request(ctx.request.clone(), { signal })
-        attempts.push(next({ ...ctx, request: req }))
-
-        if (attemptIndex > 0) {
-          onHedge?.(ctx.request, attemptIndex)
-        }
-      }
-
-      function abortLosers(winnerIndex: number): void {
-        controllers.forEach((c, i) => {
-          if (i !== winnerIndex) c.abort()
-        })
-      }
-
-      // Launch initial attempt
-      launch(0)
-
       return new Promise<Response>((resolve, reject) => {
         let settled = false
         let launched = 1
@@ -64,6 +40,47 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
         let fallbackIndex = -1
         let lastError: unknown
         const timers: ReturnType<typeof setTimeout>[] = []
+
+        function launch(): void {
+          const controller = new AbortController()
+          controllers.push(controller)
+
+          const parentSignal =
+            ctx.metadata.signals.combined ?? ctx.request.signal
+          const signal = AbortSignal.any([parentSignal, controller.signal])
+
+          const req = new Request(ctx.request.clone(), { signal })
+          attempts.push(next({ ...ctx, request: req }))
+        }
+
+        function abortLosers(winnerIndex: number): void {
+          controllers.forEach((c, i) => {
+            if (i !== winnerIndex) c.abort()
+          })
+        }
+
+        // A failure in onHedge must not escape request handling. Both a
+        // synchronous throw and a rejected promise fail the request and stop
+        // every in-flight attempt, so nothing is left running or unhandled.
+        function failOnHedgeError(error: unknown): void {
+          if (settled) return
+          settled = true
+          timers.forEach(clearTimeout)
+          // -1 matches no attempt, so every in-flight attempt is aborted.
+          abortLosers(-1)
+          reject(error)
+        }
+
+        function fireOnHedge(attemptIndex: number): void {
+          if (!onHedge || settled) return
+          try {
+            void Promise.resolve(onHedge(ctx.request, attemptIndex)).catch(
+              failOnHedgeError
+            )
+          } catch (error) {
+            failOnHedgeError(error)
+          }
+        }
 
         function settle(winnerIndex: number, value: Response): void {
           settled = true
@@ -127,13 +144,22 @@ export function hedgePlugin(options: HedgePluginOptions): ClientPlugin {
           )
         }
 
+        // Launch initial attempt
+        launch()
         watchAttempt(0)
 
         for (let h = 1; h <= maxHedges; h++) {
           const hedgeIndex = h
           const t = setTimeout(() => {
             launched++
-            launch(hedgeIndex)
+            launch()
+            // Fire onHedge before watching the attempt: when the hedge response
+            // is already fulfilled, its watcher would otherwise settle the race
+            // in the next microtask and swallow a callback rejection that is
+            // already known. fireOnHedge catches synchronous errors, and the
+            // watcher is still attached in this same turn, so an attempt
+            // aborted by failOnHedgeError never rejects without a handler.
+            fireOnHedge(hedgeIndex)
             watchAttempt(hedgeIndex)
           }, delayMs * hedgeIndex)
           timers.push(t)
