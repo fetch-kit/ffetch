@@ -343,6 +343,15 @@ const data = await client('https://example.com/data').json<{ ok: boolean }>()
 const response = await client('https://example.com/data')
 ```
 
+An empty `plugins` list contributes no extensions, so the client keeps its base call signature, `pendingRequests` and `abortAll` - the same client `createClient()` returns. `createClient({ plugins: [] })`, `createClient({ plugins: [] as const })` and a `readonly []` variable are all supported.
+
+```typescript
+const client = createClient({ plugins: [] })
+
+await client('https://example.com/data') // Promise<Response>
+client.pendingRequests // PendingRequest[]
+```
+
 ### Default Values
 
 | Option             | Default Value / Logic                                                                           |
