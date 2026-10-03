@@ -69,29 +69,31 @@ export function circuitPlugin(
       : undefined
   }
 
+  /** What one observation says about the dependency. */
+  type Classification = { failure: true } | { response: Response } | undefined
+
   /**
-   * Classifies one observation the pipeline reports. Only the dependency's own
-   * failures count: a 5xx or 429, or a `NetworkError`, a `TimeoutError` or a
-   * `RetryLimitError` the attempt raised. A 4xx is not a failure - including
-   * when `throwOnHttpError` surfaces it as an `HttpError`, because that option
+   * Classifies the response the pipeline returns. A 4xx is not a failure - even
+   * when `throwOnHttpError` surfaces one as an `HttpError`, because that option
    * changes how a response reaches the pipeline, not which statuses describe a
    * broken dependency - and it resets the count the way a success does.
+   */
+  const classifyResponse = (response: Response): Classification =>
+    isFailureStatus(response.status) ? { failure: true } : { response }
+
+  /**
+   * Classifies the error the pipeline reports. Only the dependency's own
+   * failures count: a 5xx or 429 read from the response an `HttpError` carries,
+   * or a `NetworkError`, `TimeoutError` or `RetryLimitError` the attempt raised.
    *
    * Everything else reports `undefined` and is ignored by omission, so an error
    * of any other type - a local admission refusal (`BulkheadFullError`), a
    * cancellation (`AbortError`), a raw rejection from a custom `fetchHandler` -
    * is never treated as evidence about the dependency. Whether an error came
-   * from the attempt at all is the core's answer, read from
-   * `ctx.metadata.provenance`, rather than something this function infers.
+   * from the attempt at all is the core's answer, which the caller reads from
+   * `ctx.metadata.provenance` rather than inferring it here.
    */
-  const classify = (
-    response?: Response,
-    error?: unknown
-  ): { failure: true } | { response: Response } | undefined => {
-    if (error === undefined) {
-      if (response === undefined) return undefined
-      return isFailureStatus(response.status) ? { failure: true } : { response }
-    }
+  const classifyError = (error: unknown): Classification => {
     if (error instanceof HttpError) {
       const carried = carriedResponse(error)
       if (carried === undefined) return undefined
@@ -158,7 +160,7 @@ export function circuitPlugin(
    */
   const observe = async (
     request: Request,
-    decision: ReturnType<typeof classify>,
+    decision: Classification,
     reason: Omit<
       Extract<CircuitOpenReason, { type: 'threshold-reached' }>,
       'type'
@@ -197,7 +199,7 @@ export function circuitPlugin(
       await assertAdmitted(ctx.request)
     },
     onSuccess: async (ctx, response) => {
-      await observe(ctx.request, classify(response, undefined), { response })
+      await observe(ctx.request, classifyResponse(response), { response })
     },
     onError: async (ctx, error) => {
       // Only an error the attempt itself raised says anything about the
@@ -208,7 +210,7 @@ export function circuitPlugin(
       if (ctx.metadata.provenance !== 'attempt') {
         return
       }
-      await observe(ctx.request, classify(undefined, error), { error })
+      await observe(ctx.request, classifyError(error), { error })
     },
   }
 }

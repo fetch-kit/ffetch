@@ -11,6 +11,7 @@ import {
 } from '../../src/error.js'
 import { bulkheadPlugin } from '../../src/plugins/bulkhead.js'
 import { circuitPlugin } from '../../src/plugins/circuit.js'
+import type { PluginRequestContext } from '../../src/plugins.js'
 
 describe('circuit plugin parity', () => {
   it('opens after threshold failures and blocks while open', async () => {
@@ -227,6 +228,24 @@ describe('circuit plugin parity', () => {
 })
 
 describe('circuit plugin failure classification', () => {
+  /**
+   * The context the plugin sees for an error the attempt raised: `provenance` is
+   * the core's answer, and `attempt` is the only value that describes the
+   * dependency.
+   */
+  const attemptFailureContext = (): PluginRequestContext => ({
+    request: new Request('https://example.com/circuit-classification'),
+    init: {},
+    state: Object.create(null),
+    metadata: {
+      startedAt: Date.now(),
+      timeoutMs: 0,
+      signals: {},
+      retry: { configuredRetries: 0, configuredDelay: 0, attempt: 1 },
+      provenance: 'attempt',
+    },
+  })
+
   it.each([429, 500, 502, 503])(
     'counts a %i surfaced by throwOnHttpError as a dependency failure',
     async (status) => {
@@ -296,6 +315,25 @@ describe('circuit plugin failure classification', () => {
     }
 
     expect(calls).toBe(statuses.length)
+  })
+
+  it('does not count an HttpError that carries no status', async () => {
+    // The status is read from what the `HttpError` carries, and the core always
+    // attaches the response it was thrown for. An error built by hand with no
+    // response has no status to read, so it is not evidence about the dependency
+    // however it is typed.
+    const onCircuitOpen = vi.fn()
+    const plugin = circuitPlugin({ threshold: 1, reset: 1_000, onCircuitOpen })
+
+    for (const cause of ['not a response', null, { no: 'status' }]) {
+      const pending = plugin.onError?.(
+        attemptFailureContext(),
+        new HttpError('upstream failed', cause)
+      )
+      await expect(pending).resolves.toBeUndefined()
+    }
+
+    expect(onCircuitOpen).not.toHaveBeenCalled()
   })
 
   it('does not count a bulkhead rejection as a dependency failure', async () => {

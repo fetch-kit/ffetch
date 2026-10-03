@@ -731,8 +731,9 @@ export function createClient<
           } catch (err) {
             // Reporting the response is local code too, so a plugin that fails
             // while being told about it is not evidence about the dependency
-            // when the other plugins hear about that failure.
-            if (pluginContext) pluginContext.metadata.provenance = 'hook'
+            // when the other plugins hear about that failure. The context is
+            // set before the pipeline runs, which is what reported the failure.
+            pluginContext!.metadata.provenance = 'hook'
             throw err
           }
           return response
