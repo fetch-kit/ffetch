@@ -142,6 +142,22 @@ describe('plugin pipeline', () => {
     ).resolves.toBeInstanceOf(Response)
   })
 
+  it('treats an empty plugin list like no plugins at all', async () => {
+    const client = createClient({
+      plugins: [],
+      fetchHandler: async () => new Response('ok', { status: 200 }),
+    })
+
+    expect(client.pendingRequests).toEqual([])
+
+    const pending = client('https://example.com/empty')
+    expect(client.pendingRequests).toHaveLength(1)
+
+    await expect(pending).resolves.toBeInstanceOf(Response)
+    expect(client.pendingRequests).toEqual([])
+    expect(() => client.abortAll()).not.toThrow()
+  })
+
   it('throws when multiple plugins define the same extension key', () => {
     const first: ClientPlugin<{ conflict: number }> = {
       name: 'first',

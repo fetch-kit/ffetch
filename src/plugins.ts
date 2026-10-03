@@ -18,19 +18,25 @@ export type PluginRequestPromiseExtensionOf<P> =
     ? TRequestPromiseExtension
     : Record<never, never>
 
+// `UnionToIntersection<never>` is `unknown`, and `Extract<unknown, object>` is
+// `never`, so a plugin list that is empty at the type level - `never[]` from
+// `[]`, `readonly []` from `[] as const` - used to erase every extension the
+// client is composed from, leaving a client that is itself `never`. An empty
+// extension union contributes an empty object instead.
+type PluginExtensionsFrom<TExtension> = [TExtension] extends [never]
+  ? Record<never, never>
+  : Extract<UnionToIntersection<TExtension>, object>
+
 export type PluginExtensions<
   TPlugins extends readonly ClientPlugin<PluginExtensionBase>[],
-> = Extract<UnionToIntersection<PluginExtensionOf<TPlugins[number]>>, object>
+> = PluginExtensionsFrom<PluginExtensionOf<TPlugins[number]>>
 
 export type PluginRequestPromiseExtensions<
   TPlugins extends readonly ClientPlugin<
     PluginExtensionBase,
     PluginRequestPromiseExtensionBase
   >[],
-> = Extract<
-  UnionToIntersection<PluginRequestPromiseExtensionOf<TPlugins[number]>>,
-  object
->
+> = PluginExtensionsFrom<PluginRequestPromiseExtensionOf<TPlugins[number]>>
 
 export type PluginSetupContext<
   TExtension extends PluginExtensionBase = Record<never, never>,
